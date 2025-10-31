@@ -1,0 +1,52 @@
+# Environment variables
+.env
+*.env
+.env.local
+.env.production
+
+# Python
+__pycache__/
+*.py[cod]
+*.so
+.Python
+env/
+venv/
+ENV/
+
+# Database files
+*.db
+*.sqlite
+data/*.db
+data/*.csv
+data/snapshots/*.csv
+
+# Logs
+*.log
+logs/
+
+# IDE
+.vscode/
+.idea/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Node modules
+node_modules/
+frontend/node_modules/
+frontend/dist/
+backend/app/nul
+
+# Windows null device files
+nul
+*/nul
+**/nul
+
+# Streamlit secrets
+.streamlit/secrets.toml
+
+# Large installer files
+*.exe
+Docker*.exe
+*Installer.exe

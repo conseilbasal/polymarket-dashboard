@@ -1,0 +1,16 @@
+{
+    "TRADERS": [
+        {
+            "name": "25usdc",
+            "address": "0x75e765216a57942d738d880ffcda854d9f869080"
+        },
+        {
+            "name": "Shunky",
+            "address": "0x535585bfE3f231029dBC2218263dC4Be91bFFAE9"
+        },
+        {
+            "name": "Car",
+            "address": "0x7c3db723f1d4d8cb9c550095203b686cb11e5c6b"
+        }
+    ]
+}

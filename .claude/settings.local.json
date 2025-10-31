@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git ls-tree:*)",
+      "Bash(git log:*)",
+      "Bash(git checkout:*)",
+      "Bash(del \"c:\\Users\\Lebas\\OneDrive\\Documents\\Polymarket dashboard\\generate_wallet.py\")",
+      "Bash(git filter-branch:*)",
+      "Bash(git reflog:*)",
+      "Bash(git gc:*)",
+      "Bash(git remote get-url:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

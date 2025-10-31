@@ -1,0 +1,38 @@
+# Core dependencies
+pandas>=2.0.0
+requests>=2.31.0
+numpy>=1.24.0
+
+# FastAPI and server
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+python-multipart==0.0.6
+
+# Database
+sqlalchemy==2.0.23
+psycopg2-binary==2.9.9
+alembic==1.12.1
+
+# HTTP
+httpx==0.25.1
+
+# Environment
+python-dotenv==1.0.0
+
+# Date/Time
+python-dateutil==2.8.2
+
+# Authentication
+passlib[bcrypt]==1.7.4
+python-jose[cryptography]==3.3.0
+
+# Scheduling
+apscheduler==3.10.4
+pytz==2023.3
+
+# Streamlit (optional - for old dashboard)
+streamlit>=1.28.0
+
+# Polymarket Trading
+py-clob-client>=0.26.0
+web3>=7.14.0
