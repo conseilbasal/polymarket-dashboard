@@ -7,12 +7,14 @@ import requests
 import pandas as pd
 import json
 import logging
+import asyncio
 from datetime import datetime
 from pathlib import Path
 from apscheduler.schedulers.background import BackgroundScheduler
 from apscheduler.triggers.interval import IntervalTrigger
 
 from database import save_snapshot, save_capital_snapshot, init_db
+from copy_trading_engine import copy_trading_engine
 
 # Configure logging
 logging.basicConfig(
@@ -166,9 +168,27 @@ def start_scheduler():
         replace_existing=True
     )
 
+    # Add Copy Trading jobs (every 5 minutes)
+    scheduler.add_job(
+        func=lambda: asyncio.run(copy_trading_engine.monitor_positions()),
+        trigger=IntervalTrigger(minutes=5),
+        id='copy_trading_monitor',
+        name='Copy Trading - Position Monitor',
+        replace_existing=True
+    )
+
+    scheduler.add_job(
+        func=lambda: asyncio.run(copy_trading_engine.manage_pending_orders()),
+        trigger=IntervalTrigger(minutes=5),
+        id='copy_trading_orders',
+        name='Copy Trading - Order Manager',
+        replace_existing=True
+    )
+
     # Start scheduler
     scheduler.start()
     logger.info(f"Scheduler started - will fetch every {FETCH_INTERVAL_MINUTES} minutes")
+    logger.info("Copy Trading jobs added (5-minute intervals)")
 
     # Run once immediately on startup
     logger.info("Running initial fetch on startup...")

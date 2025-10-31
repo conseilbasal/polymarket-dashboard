@@ -16,9 +16,17 @@ import subprocess
 import sys
 import sqlite3
 import requests
+import os
+from sqlalchemy import text
 
 # Import scheduler for background fetching
 from scheduler import start_scheduler, stop_scheduler, get_scheduler_status
+
+# Import database engine for copy trading
+from database import engine
+
+# Import copy trading engine
+from copy_trading_engine import copy_trading_engine
 
 # Import authentication
 from auth import (
@@ -523,6 +531,320 @@ async def get_polymarket_leaderboard(limit: int = 100):
         raise HTTPException(status_code=503, detail=f"Failed to fetch leaderboard: {str(e)}")
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+# ====================
+# COPY TRADING ENDPOINTS
+# ====================
+
+@app.post("/api/copy-trading/enable", dependencies=[Depends(get_current_user)])
+async def enable_copy_trading(
+    target_trader: str,
+    trader_name: str,
+    copy_percentage: float
+):
+    """
+    Activer copy trading pour un trader
+
+    Args:
+        target_trader: Adresse Ethereum du trader (0x...)
+        trader_name: Nom friendly (ex: "25usdc")
+        copy_percentage: Pourcentage à copier (0.1-100)
+
+    Returns:
+        {"status": "enabled", "config": {...}}
+    """
+    # Validation
+    if not (0.1 <= copy_percentage <= 100):
+        raise HTTPException(400, "Percentage must be between 0.1 and 100")
+
+    try:
+        # Insérer dans DB
+        with engine.connect() as conn:
+            # Check if PostgreSQL or SQLite
+            is_postgres = str(engine.url).startswith('postgresql')
+
+            if is_postgres:
+                query = text("""
+                    INSERT INTO copy_trading_config
+                    (user_wallet_address, target_trader_address, target_trader_name, copy_percentage, enabled)
+                    VALUES (:user_wallet, :target_trader, :trader_name, :percentage, true)
+                    ON CONFLICT (user_wallet_address, target_trader_address)
+                    DO UPDATE SET
+                        copy_percentage = :percentage,
+                        enabled = true,
+                        updated_at = NOW()
+                    RETURNING *
+                """)
+            else:  # SQLite
+                query = text("""
+                    INSERT INTO copy_trading_config
+                    (user_wallet_address, target_trader_address, target_trader_name, copy_percentage, enabled)
+                    VALUES (:user_wallet, :target_trader, :trader_name, :percentage, 1)
+                    ON CONFLICT (user_wallet_address, target_trader_address)
+                    DO UPDATE SET
+                        copy_percentage = :percentage,
+                        enabled = 1,
+                        updated_at = CURRENT_TIMESTAMP
+                """)
+
+            result = conn.execute(query, {
+                "user_wallet": os.getenv("POLYMARKET_WALLET_ADDRESS"),
+                "target_trader": target_trader,
+                "trader_name": trader_name,
+                "percentage": copy_percentage
+            })
+
+            conn.commit()
+
+            # For SQLite, we need to fetch the inserted row separately
+            if not is_postgres:
+                select_query = text("""
+                    SELECT * FROM copy_trading_config
+                    WHERE user_wallet_address = :user_wallet
+                    AND target_trader_address = :target_trader
+                """)
+                result = conn.execute(select_query, {
+                    "user_wallet": os.getenv("POLYMARKET_WALLET_ADDRESS"),
+                    "target_trader": target_trader
+                })
+
+            config = dict(result.fetchone()._mapping)
+
+        return {"status": "enabled", "config": config}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to enable copy trading: {str(e)}")
+
+
+@app.post("/api/copy-trading/disable", dependencies=[Depends(get_current_user)])
+async def disable_copy_trading(target_trader: str):
+    """Désactiver copy trading pour un trader"""
+
+    try:
+        with engine.connect() as conn:
+            is_postgres = str(engine.url).startswith('postgresql')
+
+            # Désactiver dans config
+            if is_postgres:
+                query = text("""
+                    UPDATE copy_trading_config
+                    SET enabled = false, updated_at = NOW()
+                    WHERE user_wallet_address = :user_wallet
+                    AND target_trader_address = :target_trader
+                """)
+            else:  # SQLite
+                query = text("""
+                    UPDATE copy_trading_config
+                    SET enabled = 0, updated_at = CURRENT_TIMESTAMP
+                    WHERE user_wallet_address = :user_wallet
+                    AND target_trader_address = :target_trader
+                """)
+
+            conn.execute(query, {
+                "user_wallet": os.getenv("POLYMARKET_WALLET_ADDRESS"),
+                "target_trader": target_trader
+            })
+
+            # Annuler tous les ordres en attente
+            if is_postgres:
+                cancel_query = text("""
+                    UPDATE pending_copy_orders
+                    SET status = 'cancelled', last_updated = NOW()
+                    WHERE user_wallet_address = :user_wallet
+                    AND target_trader_address = :target_trader
+                    AND status IN ('pending', 'partial')
+                """)
+            else:  # SQLite
+                cancel_query = text("""
+                    UPDATE pending_copy_orders
+                    SET status = 'cancelled', last_updated = CURRENT_TIMESTAMP
+                    WHERE user_wallet_address = :user_wallet
+                    AND target_trader_address = :target_trader
+                    AND status IN ('pending', 'partial')
+                """)
+
+            conn.execute(cancel_query, {
+                "user_wallet": os.getenv("POLYMARKET_WALLET_ADDRESS"),
+                "target_trader": target_trader
+            })
+
+            conn.commit()
+
+        return {"status": "disabled"}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to disable copy trading: {str(e)}")
+
+
+@app.get("/api/copy-trading/status", dependencies=[Depends(get_current_user)])
+async def get_copy_trading_status():
+    """
+    Get copy trading status
+
+    Returns:
+        {
+            "active_configs": [...],
+            "pending_orders": [...],
+            "total_pnl": float
+        }
+    """
+
+    try:
+        with engine.connect() as conn:
+            is_postgres = str(engine.url).startswith('postgresql')
+
+            # Active configs
+            if is_postgres:
+                configs_query = text("""
+                    SELECT *
+                    FROM copy_trading_config
+                    WHERE user_wallet_address = :user_wallet
+                    AND enabled = true
+                """)
+            else:  # SQLite
+                configs_query = text("""
+                    SELECT *
+                    FROM copy_trading_config
+                    WHERE user_wallet_address = :user_wallet
+                    AND enabled = 1
+                """)
+
+            result = conn.execute(configs_query, {
+                "user_wallet": os.getenv("POLYMARKET_WALLET_ADDRESS")
+            })
+
+            configs = [dict(row._mapping) for row in result.fetchall()]
+
+            # Pending orders
+            orders_query = text("""
+                SELECT *
+                FROM pending_copy_orders
+                WHERE user_wallet_address = :user_wallet
+                AND status IN ('pending', 'partial')
+                ORDER BY created_at DESC
+                LIMIT 100
+            """)
+
+            result = conn.execute(orders_query, {
+                "user_wallet": os.getenv("POLYMARKET_WALLET_ADDRESS")
+            })
+
+            pending_orders = [dict(row._mapping) for row in result.fetchall()]
+
+            # Total PnL from executed trades
+            pnl_query = text("""
+                SELECT SUM(profit_loss) as total_pnl
+                FROM executed_copy_trades
+                WHERE user_wallet_address = :user_wallet
+            """)
+
+            result = conn.execute(pnl_query, {
+                "user_wallet": os.getenv("POLYMARKET_WALLET_ADDRESS")
+            })
+
+            row = result.fetchone()
+            total_pnl = float(row[0]) if row and row[0] else 0.0
+
+        return {
+            "active_configs": configs,
+            "pending_orders": pending_orders,
+            "total_pnl": total_pnl
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get copy trading status: {str(e)}")
+
+
+@app.get("/api/copy-trading/history", dependencies=[Depends(get_current_user)])
+async def get_copy_trading_history(days: int = 30):
+    """Get copy trading history"""
+
+    try:
+        with engine.connect() as conn:
+            is_postgres = str(engine.url).startswith('postgresql')
+
+            if is_postgres:
+                query = text("""
+                    SELECT *
+                    FROM executed_copy_trades
+                    WHERE user_wallet_address = :user_wallet
+                    AND executed_at >= NOW() - INTERVAL ':days days'
+                    ORDER BY executed_at DESC
+                    LIMIT 1000
+                """)
+            else:  # SQLite
+                query = text("""
+                    SELECT *
+                    FROM executed_copy_trades
+                    WHERE user_wallet_address = :user_wallet
+                    AND executed_at >= datetime('now', '-' || :days || ' days')
+                    ORDER BY executed_at DESC
+                    LIMIT 1000
+                """)
+
+            result = conn.execute(query, {
+                "user_wallet": os.getenv("POLYMARKET_WALLET_ADDRESS"),
+                "days": days
+            })
+
+            trades = [dict(row._mapping) for row in result.fetchall()]
+
+        return {
+            "trades": trades,
+            "count": len(trades),
+            "total_pnl": sum(float(t.get('profit_loss', 0) or 0) for t in trades)
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get copy trading history: {str(e)}")
+
+
+@app.get("/api/copy-trading/performance", dependencies=[Depends(get_current_user)])
+async def get_copy_trading_performance():
+    """Get detailed performance stats"""
+
+    try:
+        with engine.connect() as conn:
+            is_postgres = str(engine.url).startswith('postgresql')
+
+            # Stats par trader
+            if is_postgres:
+                query = text("""
+                    SELECT
+                        target_trader_address,
+                        target_trader_name,
+                        COUNT(*) as trade_count,
+                        SUM(profit_loss) as total_pnl,
+                        AVG(slippage) as avg_slippage,
+                        SUM(CASE WHEN profit_loss > 0 THEN 1 ELSE 0 END)::float / COUNT(*)::float as win_rate
+                    FROM executed_copy_trades
+                    WHERE user_wallet_address = :user_wallet
+                    GROUP BY target_trader_address, target_trader_name
+                """)
+            else:  # SQLite
+                query = text("""
+                    SELECT
+                        target_trader_address,
+                        target_trader_name,
+                        COUNT(*) as trade_count,
+                        SUM(profit_loss) as total_pnl,
+                        AVG(slippage) as avg_slippage,
+                        CAST(SUM(CASE WHEN profit_loss > 0 THEN 1 ELSE 0 END) AS FLOAT) / CAST(COUNT(*) AS FLOAT) as win_rate
+                    FROM executed_copy_trades
+                    WHERE user_wallet_address = :user_wallet
+                    GROUP BY target_trader_address, target_trader_name
+                """)
+
+            result = conn.execute(query, {
+                "user_wallet": os.getenv("POLYMARKET_WALLET_ADDRESS")
+            })
+
+            stats = [dict(row._mapping) for row in result.fetchall()]
+
+        return {"trader_stats": stats}
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to get copy trading performance: {str(e)}")
 
 if __name__ == "__main__":
     print("[INFO] Starting Polymarket Copy Trading API Server...")
