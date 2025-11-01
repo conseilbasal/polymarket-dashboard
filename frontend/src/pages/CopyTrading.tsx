@@ -714,7 +714,7 @@ export default function CopyTrading() {
                               : ''
                           }`}
                         >
-                          <td className="px-4 py-3 max-w-md" title={action.market}>
+                          <td className="px-4 py-2 max-w-md" title={action.market}>
                             <div className="flex items-center gap-2">
                               <span className="truncate">{action.market.substring(0, 60)}</span>
                               {actionFilter === 'IGNORED' ? (
@@ -739,66 +739,66 @@ export default function CopyTrading() {
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-2">
                             <span className="px-2 py-1 rounded text-xs bg-gray-700 text-gray-300">
                               {action.side}
                             </span>
                           </td>
-                          <td className="px-4 py-3">
+                          <td className="px-4 py-2">
                             <a
                               href={generatePolymarketUrl(action.market)}
                               target="_blank"
                               rel="noopener noreferrer"
-                              className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium transition-all hover:scale-105 hover:shadow-lg cursor-pointer ${
+                              className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-all cursor-pointer ${
                                 action.action === 'BUY'
-                                  ? 'bg-green-600/20 text-green-400 border border-green-600/50 hover:bg-green-600/30 hover:border-green-500'
+                                  ? 'bg-green-600/15 text-green-400 hover:bg-green-600/25'
                                   : action.action === 'SELL'
-                                  ? 'bg-red-600/20 text-red-400 border border-red-600/50 hover:bg-red-600/30 hover:border-red-500'
+                                  ? 'bg-red-600/15 text-red-400 hover:bg-red-600/25'
                                   : 'bg-gray-700 text-gray-300'
                               }`}
                             >
                               {action.action === 'BUY' ? 'BUY' : 'SELL'}
-                              <ExternalLink size={12} className="opacity-70" />
+                              <ExternalLink size={11} className="opacity-60" />
                             </a>
                           </td>
                           {showPrices && (
-                            <td className="px-4 py-3 text-right font-mono text-cyan-400 font-semibold">
-                              {action.current_price ? action.current_price.toFixed(3) : '-'}
+                            <td className="px-4 py-2 text-right font-mono text-cyan-400 font-semibold">
+                              {action.current_price ? (action.current_price * 100).toFixed(1) : '-'}
                             </td>
                           )}
-                          <td className="px-4 py-3 text-right font-mono">
+                          <td className="px-4 py-2 text-right font-mono">
                             ${action.delta_invested.toFixed(2)}
                           </td>
                           {/* 25usdc columns */}
                           {showPrices && (
-                            <td className="px-4 py-3 text-right font-mono text-gray-400 bg-blue-900/5">
-                              {action.avg_price_25usdc.toFixed(3)}
+                            <td className="px-4 py-2 text-right font-mono text-gray-400 bg-blue-900/5">
+                              {(action.avg_price_25usdc * 100).toFixed(1)}
                             </td>
                           )}
-                          <td className={`px-4 py-3 text-right font-mono bg-blue-900/5 ${action.pnl_25usdc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          <td className={`px-4 py-2 text-right font-mono bg-blue-900/5 ${action.pnl_25usdc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                             ${action.pnl_25usdc?.toFixed(2) || '0.00'}
                           </td>
-                          <td className="px-4 py-3 text-right font-mono bg-blue-900/5 text-blue-300">
+                          <td className="px-4 py-2 text-right font-mono bg-blue-900/5 text-blue-300">
                             {action.target_size.toFixed(0)}
                           </td>
                           {/* Shunky columns */}
                           {showPrices && (
-                            <td className="px-4 py-3 text-right font-mono text-gray-400 bg-green-900/5">
-                              {action.avg_price_shunky > 0 ? action.avg_price_shunky.toFixed(3) : '-'}
+                            <td className="px-4 py-2 text-right font-mono text-gray-400 bg-green-900/5">
+                              {action.avg_price_shunky > 0 ? (action.avg_price_shunky * 100).toFixed(1) : '-'}
                             </td>
                           )}
-                          <td className={`px-4 py-3 text-right font-mono bg-green-900/5 ${action.pnl_shunky >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          <td className={`px-4 py-2 text-right font-mono bg-green-900/5 ${action.pnl_shunky >= 0 ? 'text-green-400' : 'text-red-400'}`}>
                             ${action.pnl_shunky?.toFixed(2) || '0.00'}
                           </td>
-                          <td className="px-4 py-3 text-right font-mono bg-green-900/5 text-green-300">
+                          <td className="px-4 py-2 text-right font-mono bg-green-900/5 text-green-300">
                             {action.size_shunky.toFixed(0)}
                           </td>
-                          <td className="px-4 py-3 text-right font-mono">
+                          <td className="px-4 py-2 text-right font-mono">
                             {action.delta_shares > 0 ? '+' : ''}
                             {action.delta_shares.toFixed(0)}
                           </td>
                           <td
-                            className="px-4 py-3 text-center cursor-pointer hover:bg-gray-700/30 transition-colors"
+                            className="px-4 py-2 text-center cursor-pointer hover:bg-gray-700/30 transition-colors"
                             onClick={() => handleOpenOrderModal(action)}
                           >
                             {pendingOrder ? (
@@ -808,7 +808,7 @@ export default function CopyTrading() {
                                   className={`${action.action === 'BUY' ? 'text-green-400' : 'text-red-400'} animate-pulse`}
                                 />
                                 <span className={`font-mono text-xs ${action.action === 'BUY' ? 'text-green-400' : 'text-red-400'}`}>
-                                  {pendingOrder.shares}@{pendingOrder.price}
+                                  {pendingOrder.shares} @ {(pendingOrder.price * 100).toFixed(1)}
                                 </span>
                                 <button
                                   onClick={(e) => handleRemovePendingOrder(action.market, action.side, e)}
