@@ -28,6 +28,9 @@ from database import engine
 # Import copy trading engine
 from copy_trading_engine import copy_trading_engine
 
+# Import copy trading database initialization
+from init_copy_trading_db import init_copy_trading_tables
+
 # Import authentication
 from auth import (
     LoginRequest,
@@ -44,6 +47,9 @@ app = FastAPI(title="Polymarket Copy Trading API", version="1.0.0")
 @app.on_event("startup")
 async def startup_event():
     """Start the background scheduler on application startup"""
+    # Initialize Copy Trading database tables
+    init_copy_trading_tables()
+
     print("[SCHEDULER] Starting background data fetcher...")
     start_scheduler()
     print("[SCHEDULER] Background scheduler started successfully")
