@@ -132,8 +132,9 @@ class CopyTradingEngine:
             # Format as dict keyed by market_id + token_id
             positions = {}
             for pos in positions_data:
-                market_id = pos.get('market')
-                token_id = pos.get('asset_id')  # This is the token ID (YES or NO)
+                # API returns 'conditionId' for market and 'asset' for token ID
+                market_id = pos.get('conditionId')
+                token_id = str(pos.get('asset'))  # Token ID as string
 
                 if not market_id or not token_id:
                     continue
@@ -142,12 +143,12 @@ class CopyTradingEngine:
 
                 positions[key] = {
                     'market_id': market_id,
-                    'market_name': pos.get('market_slug', ''),
+                    'market_name': pos.get('slug', ''),  # Use 'slug' instead of 'market_slug'
                     'token_id': token_id,
                     'side': pos.get('outcome', 'YES'),  # YES or NO
                     'size': float(pos.get('size', 0)),
-                    'avg_price': float(pos.get('avg_price', 0)),
-                    'value': float(pos.get('value', 0))
+                    'avg_price': float(pos.get('avgPrice', 0)),  # 'avgPrice' not 'avg_price'
+                    'value': float(pos.get('currentValue', 0))  # 'currentValue' not 'value'
                 }
 
             logger.info(f"Fetched {len(positions)} position(s) for {trader_address[:8]}...")
