@@ -712,5 +712,24 @@ class CopyTradingEngine:
             return [dict(row._mapping) for row in rows]
 
 
-# Global instance
-copy_trading_engine = CopyTradingEngine()
+# Global instance - lazy initialization
+# Only create instance if environment variables are set
+_copy_trading_engine_instance = None
+
+def get_copy_trading_engine():
+    """Get or create the copy trading engine instance"""
+    global _copy_trading_engine_instance
+    if _copy_trading_engine_instance is None:
+        _copy_trading_engine_instance = CopyTradingEngine()
+    return _copy_trading_engine_instance
+
+# Try to create instance, but don't fail if env vars not set
+copy_trading_engine = None
+try:
+    import os
+    if os.getenv("POLYMARKET_PRIVATE_KEY"):
+        copy_trading_engine = CopyTradingEngine()
+except (ValueError, Exception) as e:
+    # Environment variables not set - copy trading will be disabled
+    print(f"[WARNING] Copy trading engine not initialized: {e}")
+    pass

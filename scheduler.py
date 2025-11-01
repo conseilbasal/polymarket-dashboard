@@ -168,27 +168,30 @@ def start_scheduler():
         replace_existing=True
     )
 
-    # Add Copy Trading jobs (every 5 minutes)
-    scheduler.add_job(
-        func=lambda: asyncio.run(copy_trading_engine.monitor_positions()),
-        trigger=IntervalTrigger(minutes=5),
-        id='copy_trading_monitor',
-        name='Copy Trading - Position Monitor',
-        replace_existing=True
-    )
+    # Add Copy Trading jobs (every 5 minutes) - only if engine is initialized
+    if copy_trading_engine is not None:
+        scheduler.add_job(
+            func=lambda: asyncio.run(copy_trading_engine.monitor_positions()),
+            trigger=IntervalTrigger(minutes=5),
+            id='copy_trading_monitor',
+            name='Copy Trading - Position Monitor',
+            replace_existing=True
+        )
 
-    scheduler.add_job(
-        func=lambda: asyncio.run(copy_trading_engine.manage_pending_orders()),
-        trigger=IntervalTrigger(minutes=5),
-        id='copy_trading_orders',
-        name='Copy Trading - Order Manager',
-        replace_existing=True
-    )
+        scheduler.add_job(
+            func=lambda: asyncio.run(copy_trading_engine.manage_pending_orders()),
+            trigger=IntervalTrigger(minutes=5),
+            id='copy_trading_orders',
+            name='Copy Trading - Order Manager',
+            replace_existing=True
+        )
+        logger.info("Copy Trading jobs added (5-minute intervals)")
+    else:
+        logger.warning("Copy Trading jobs NOT added - environment variables not configured")
 
     # Start scheduler
     scheduler.start()
     logger.info(f"Scheduler started - will fetch every {FETCH_INTERVAL_MINUTES} minutes")
-    logger.info("Copy Trading jobs added (5-minute intervals)")
 
     # Run once immediately on startup
     logger.info("Running initial fetch on startup...")
