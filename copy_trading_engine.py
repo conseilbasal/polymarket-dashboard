@@ -727,9 +727,23 @@ def get_copy_trading_engine():
 copy_trading_engine = None
 try:
     import os
-    if os.getenv("POLYMARKET_PRIVATE_KEY"):
+
+    # Debug: Log what Railway sees
+    private_key = os.getenv("POLYMARKET_PRIVATE_KEY")
+    wallet_address = os.getenv("POLYMARKET_WALLET_ADDRESS")
+
+    print(f"[DEBUG] POLYMARKET_PRIVATE_KEY present: {bool(private_key)}")
+    print(f"[DEBUG] POLYMARKET_WALLET_ADDRESS present: {bool(wallet_address)}")
+
+    if private_key:
+        print("[INFO] Initializing Copy Trading Engine...")
         copy_trading_engine = CopyTradingEngine()
+        print("[SUCCESS] Copy Trading Engine initialized!")
+    else:
+        print("[WARNING] POLYMARKET_PRIVATE_KEY not found in environment variables")
 except (ValueError, Exception) as e:
     # Environment variables not set - copy trading will be disabled
-    print(f"[WARNING] Copy trading engine not initialized: {e}")
+    print(f"[ERROR] Copy trading engine initialization failed: {e}")
+    import traceback
+    traceback.print_exc()
     pass
