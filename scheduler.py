@@ -75,31 +75,51 @@ def fetch_polymarket_positions():
             trader_address = trader_config['address']
 
             try:
-                url = f"https://data-api.polymarket.com/positions?user={trader_address}"
-                r = requests.get(url, timeout=10)
+                # Fetch ALL positions using pagination
+                all_positions = []
+                offset = 0
+                limit = 100  # API default limit
 
-                if r.status_code == 200:
-                    positions = r.json()
+                while True:
+                    url = f"https://data-api.polymarket.com/positions?user={trader_address}&limit={limit}&offset={offset}"
+                    r = requests.get(url, timeout=10)
 
-                    if positions:
-                        logger.info(f"  ✓ {trader_name}: {len(positions)} positions")
+                    if r.status_code == 200:
+                        positions = r.json()
 
-                        for p in positions:
-                            records.append({
-                                'user': trader_name,
-                                'market': p.get('title', 'Unknown'),
-                                'side': p.get('outcome', 'Unknown'),
-                                'size': float(p.get('size', 0)),
-                                'avg_price': float(p.get('avgPrice', 0)),
-                                'current_price': float(p.get('curPrice', 0)),
-                                'pnl': float(p.get('cashPnl', 0)),
-                                'updated_at': datetime.now().isoformat()
-                            })
+                        if not positions:
+                            # No more positions to fetch
+                            break
+
+                        all_positions.extend(positions)
+
+                        # If we got less than limit, we've fetched all positions
+                        if len(positions) < limit:
+                            break
+
+                        # Move to next page
+                        offset += limit
                     else:
-                        logger.info(f"  ⚠ {trader_name}: No open positions")
+                        logger.error(f"  ✗ {trader_name}: HTTP {r.status_code} at offset {offset}")
+                        errors.append(f"{trader_name}: HTTP {r.status_code}")
+                        break
+
+                if all_positions:
+                    logger.info(f"  ✓ {trader_name}: {len(all_positions)} positions (fetched with pagination)")
+
+                    for p in all_positions:
+                        records.append({
+                            'user': trader_name,
+                            'market': p.get('title', 'Unknown'),
+                            'side': p.get('outcome', 'Unknown'),
+                            'size': float(p.get('size', 0)),
+                            'avg_price': float(p.get('avgPrice', 0)),
+                            'current_price': float(p.get('curPrice', 0)),
+                            'pnl': float(p.get('cashPnl', 0)),
+                            'updated_at': datetime.now().isoformat()
+                        })
                 else:
-                    logger.error(f"  ✗ {trader_name}: HTTP {r.status_code}")
-                    errors.append(f"{trader_name}: HTTP {r.status_code}")
+                    logger.info(f"  ⚠ {trader_name}: No open positions")
 
             except Exception as e:
                 logger.error(f"  ✗ {trader_name}: {str(e)}")
