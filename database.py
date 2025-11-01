@@ -126,12 +126,13 @@ def save_capital_snapshot(df, timestamp):
             total_capital = exposure + pnl
             positions_count = len(user_df)
 
+            # Convert numpy types to Python native types for PostgreSQL compatibility
             capital = CapitalHistory(
-                user=user,
-                total_capital=total_capital,
-                exposure=exposure,
-                pnl=pnl,
-                positions_count=positions_count,
+                user=str(user),
+                total_capital=float(total_capital),
+                exposure=float(exposure),
+                pnl=float(pnl),
+                positions_count=int(positions_count),
                 timestamp=datetime.fromisoformat(timestamp) if isinstance(timestamp, str) else timestamp
             )
             db.add(capital)
