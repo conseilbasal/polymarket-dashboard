@@ -739,7 +739,7 @@ async def get_copy_trading_status():
 
             # Total PnL from executed trades
             pnl_query = text("""
-                SELECT SUM(profit_loss) as total_pnl
+                SELECT SUM(pnl) as total_pnl
                 FROM executed_copy_trades
                 WHERE user_wallet_address = :user_wallet
             """)
@@ -798,7 +798,7 @@ async def get_copy_trading_history(days: int = 30):
         return {
             "trades": trades,
             "count": len(trades),
-            "total_pnl": sum(float(t.get('profit_loss', 0) or 0) for t in trades)
+            "total_pnl": sum(float(t.get('pnl', 0) or 0) for t in trades)
         }
 
     except Exception as e:
@@ -820,9 +820,9 @@ async def get_copy_trading_performance():
                         target_trader_address,
                         target_trader_name,
                         COUNT(*) as trade_count,
-                        SUM(profit_loss) as total_pnl,
+                        SUM(pnl) as total_pnl,
                         AVG(slippage) as avg_slippage,
-                        SUM(CASE WHEN profit_loss > 0 THEN 1 ELSE 0 END)::float / COUNT(*)::float as win_rate
+                        SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END)::float / COUNT(*)::float as win_rate
                     FROM executed_copy_trades
                     WHERE user_wallet_address = :user_wallet
                     GROUP BY target_trader_address, target_trader_name
@@ -833,9 +833,9 @@ async def get_copy_trading_performance():
                         target_trader_address,
                         target_trader_name,
                         COUNT(*) as trade_count,
-                        SUM(profit_loss) as total_pnl,
+                        SUM(pnl) as total_pnl,
                         AVG(slippage) as avg_slippage,
-                        CAST(SUM(CASE WHEN profit_loss > 0 THEN 1 ELSE 0 END) AS FLOAT) / CAST(COUNT(*) AS FLOAT) as win_rate
+                        CAST(SUM(CASE WHEN pnl > 0 THEN 1 ELSE 0 END) AS FLOAT) / CAST(COUNT(*) AS FLOAT) as win_rate
                     FROM executed_copy_trades
                     WHERE user_wallet_address = :user_wallet
                     GROUP BY target_trader_address, target_trader_name
