@@ -889,8 +889,8 @@ async def test_limit_order(
             price=price
         )
 
-        # Post the order
-        result = clob_client.post_order(order_data['order'], OrderType.GTC)
+        # Post the order (pass the full dict, not just order_data['order'])
+        result = clob_client.post_order(order_data, OrderType.GTC)
 
         return {
             "success": True,
