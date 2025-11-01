@@ -24,7 +24,6 @@ class PolymarketCLOBClient:
         # Get credentials from environment variables
         self.private_key = os.getenv("POLYMARKET_PRIVATE_KEY")
         self.wallet_address = os.getenv("POLYMARKET_WALLET_ADDRESS")
-        self.api_key = os.getenv("POLYMARKET_BUILDER_API_KEY")
 
         if not self.private_key:
             raise ValueError("POLYMARKET_PRIVATE_KEY environment variable not set")
@@ -33,10 +32,8 @@ class PolymarketCLOBClient:
             raise ValueError("POLYMARKET_WALLET_ADDRESS environment variable not set")
 
         # Initialize Polymarket CLOB client
-        # host: Polymarket CLOB API endpoint
-        # key: Private key for signing orders
-        # chain_id: 137 for Polygon mainnet
-        self.client = ClobClient(
+        # First create Level 1 client (without creds) to derive API credentials
+        temp_client = ClobClient(
             host="https://clob.polymarket.com",
             key=self.private_key,
             chain_id=137,  # Polygon mainnet
@@ -44,7 +41,22 @@ class PolymarketCLOBClient:
             funder=self.wallet_address
         )
 
-        logger.info(f"✅ CLOB Client initialized for wallet: {self.wallet_address[:8]}...{self.wallet_address[-6:]}")
+        # Derive API credentials from private key
+        # This generates api_key, api_secret, and api_passphrase deterministically
+        api_creds = temp_client.create_or_derive_api_creds()
+        logger.info("✅ API credentials derived from private key")
+
+        # Now create Level 2 client with full API credentials for order placement
+        self.client = ClobClient(
+            host="https://clob.polymarket.com",
+            key=self.private_key,
+            chain_id=137,  # Polygon mainnet
+            signature_type=0,  # EOA (Externally Owned Account)
+            funder=self.wallet_address,
+            creds=api_creds  # Add API credentials for Level 2 access
+        )
+
+        logger.info(f"✅ CLOB Client initialized (Level 2) for wallet: {self.wallet_address[:8]}...{self.wallet_address[-6:]}")
 
     def create_limit_order(
         self,
