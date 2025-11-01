@@ -89,11 +89,11 @@ class CopyTradingEngine:
 
         logger.info(f"Monitoring {trader_name} ({trader_address[:8]}...) at {copy_percentage}%")
 
-        # Fetch current positions from Polymarket
-        current_positions = self._fetch_trader_positions(trader_address)
+        # Fetch current positions from database (positions_history)
+        current_positions = self._fetch_trader_positions(trader_name)
 
-        # Get last snapshot from database
-        last_snapshot = self._get_last_snapshot(trader_address)
+        # Get last snapshot from database (previous update in positions_history)
+        last_snapshot = self._get_last_snapshot(trader_name)
 
         # Detect changes
         changes = self._detect_position_changes(last_snapshot, current_positions)
@@ -107,82 +107,93 @@ class CopyTradingEngine:
                 except Exception as e:
                     logger.error(f"Failed to execute copy trade: {e}")
 
-        # Save new snapshot
-        self._save_snapshot(trader_address, current_positions)
+        # No need to save snapshot - the scheduler already saves to positions_history
+        logger.info(f"Positions comparison complete for {trader_name}")
 
-    def _fetch_trader_positions(self, trader_address: str) -> Dict:
+    def _fetch_trader_positions(self, trader_name: str) -> Dict:
         """
-        Fetch current positions for a trader from Polymarket API
+        Fetch current positions for a trader from positions_history database
+        (Uses the same data source as the main dashboard for real-time updates)
 
         Returns:
-            Dict[market_id_token_id, position_data]
+            Dict[market_side, position_data]
         """
 
         try:
-            # Use data-api to get positions
-            url = f"https://data-api.polymarket.com/positions?user={trader_address}"
-            response = requests.get(url, timeout=10)
+            # Get most recent positions from positions_history table
+            with self.engine.connect() as conn:
+                query = text("""
+                    SELECT market, side, size, avg_price, current_price
+                    FROM positions_history
+                    WHERE user = :trader_name
+                    AND updated_at = (
+                        SELECT MAX(updated_at)
+                        FROM positions_history
+                        WHERE user = :trader_name
+                    )
+                """)
 
-            if response.status_code != 200:
-                logger.warning(f"Failed to fetch positions for {trader_address}: {response.status_code}")
-                return {}
+                result = conn.execute(query, {"trader_name": trader_name})
+                rows = result.fetchall()
 
-            positions_data = response.json()
+                # Format as dict keyed by market + side
+                positions = {}
+                for row in rows:
+                    market = row.market
+                    side = row.side
 
-            # Format as dict keyed by market_id + token_id
-            positions = {}
-            for pos in positions_data:
-                # API returns 'conditionId' for market and 'asset' for token ID
-                market_id = pos.get('conditionId')
-                token_id = str(pos.get('asset'))  # Token ID as string
+                    # Use market title + side as key (since we don't have market_id from DB)
+                    key = f"{market}_{side}"
 
-                if not market_id or not token_id:
-                    continue
+                    positions[key] = {
+                        'market_id': None,  # Will be fetched from API when needed for trading
+                        'market_name': market,
+                        'token_id': None,  # Will be fetched from API when needed for trading
+                        'side': side,
+                        'size': float(row.size),
+                        'avg_price': float(row.avg_price),
+                        'value': float(row.size * row.current_price)
+                    }
 
-                key = f"{market_id}_{token_id}"
-
-                positions[key] = {
-                    'market_id': market_id,
-                    'market_name': pos.get('slug', ''),  # Use 'slug' instead of 'market_slug'
-                    'token_id': token_id,
-                    'side': pos.get('outcome', 'YES'),  # YES or NO
-                    'size': float(pos.get('size', 0)),
-                    'avg_price': float(pos.get('avgPrice', 0)),  # 'avgPrice' not 'avg_price'
-                    'value': float(pos.get('currentValue', 0))  # 'currentValue' not 'value'
-                }
-
-            logger.info(f"Fetched {len(positions)} position(s) for {trader_address[:8]}...")
-            return positions
+                logger.info(f"Fetched {len(positions)} position(s) for {trader_name} from database")
+                return positions
 
         except Exception as e:
-            logger.error(f"Error fetching positions for {trader_address}: {e}")
+            logger.error(f"Error fetching positions for {trader_name} from database: {e}")
             return {}
 
-    def _get_last_snapshot(self, trader_address: str) -> Dict:
-        """Get the most recent position snapshot for a trader"""
+    def _get_last_snapshot(self, trader_name: str) -> Dict:
+        """Get the previous position snapshot for a trader from positions_history"""
 
         with self.engine.connect() as conn:
+            # Get the second-to-last snapshot (previous to current)
             query = text("""
-                SELECT market_id, token_id, side, size, avg_price, market_name
-                FROM position_snapshots
-                WHERE trader_address = :trader_address
-                AND snapshot_time = (
-                    SELECT MAX(snapshot_time)
-                    FROM position_snapshots
-                    WHERE trader_address = :trader_address
+                SELECT market, side, size, avg_price
+                FROM positions_history
+                WHERE user = :trader_name
+                AND updated_at = (
+                    SELECT MAX(updated_at)
+                    FROM positions_history
+                    WHERE user = :trader_name
+                    AND updated_at < (
+                        SELECT MAX(updated_at)
+                        FROM positions_history
+                        WHERE user = :trader_name
+                    )
                 )
             """)
 
-            result = conn.execute(query, {"trader_address": trader_address})
+            result = conn.execute(query, {"trader_name": trader_name})
             rows = result.fetchall()
 
             snapshot = {}
             for row in rows:
-                key = f"{row.market_id}_{row.token_id}"
+                # Use market + side as key (same as _fetch_trader_positions)
+                key = f"{row.market}_{row.side}"
                 snapshot[key] = {
-                    'market_id': row.market_id,
-                    'market_name': row.market_name,
-                    'token_id': row.token_id,
+                    'market_id': None,
+                    'market_name': row.market,
+                    'token_id': None,
                     'side': row.side,
                     'size': float(row.size),
                     'avg_price': float(row.avg_price)
