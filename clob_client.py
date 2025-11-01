@@ -24,7 +24,11 @@ class PolymarketCLOBClient:
         # Get credentials from environment variables
         self.private_key = os.getenv("POLYMARKET_PRIVATE_KEY")
         self.wallet_address = os.getenv("POLYMARKET_WALLET_ADDRESS")
-        self.proxy_address = os.getenv("POLYMARKET_PROXY_ADDRESS")  # Optional proxy wallet
+
+        # Optional: API credentials from Builder Settings (if not provided, will be derived)
+        self.api_key = os.getenv("POLYMARKET_API_KEY")
+        self.api_secret = os.getenv("POLYMARKET_API_SECRET")
+        self.api_passphrase = os.getenv("POLYMARKET_API_PASSPHRASE")
 
         if not self.private_key:
             raise ValueError("POLYMARKET_PRIVATE_KEY environment variable not set")
@@ -32,20 +36,27 @@ class PolymarketCLOBClient:
         if not self.wallet_address:
             raise ValueError("POLYMARKET_WALLET_ADDRESS environment variable not set")
 
-        # Initialize Polymarket CLOB client
-        # First create Level 1 client (without creds) to derive API credentials
-        temp_client = ClobClient(
-            host="https://clob.polymarket.com",
-            key=self.private_key,
-            chain_id=137,  # Polygon mainnet
-            signature_type=0,  # EOA (Externally Owned Account)
-            funder=self.wallet_address
-        )
-
-        # Derive API credentials from private key
-        # This generates api_key, api_secret, and api_passphrase deterministically
-        api_creds = temp_client.create_or_derive_api_creds()
-        logger.info("✅ API credentials derived from private key")
+        # Check if explicit API credentials are provided
+        if self.api_key and self.api_secret and self.api_passphrase:
+            # Use provided API credentials from Builder Settings
+            from py_clob_client.clob_types import ApiCreds
+            api_creds = ApiCreds(
+                api_key=self.api_key,
+                api_secret=self.api_secret,
+                api_passphrase=self.api_passphrase
+            )
+            logger.info("✅ Using API credentials from environment variables")
+        else:
+            # Derive API credentials from private key
+            temp_client = ClobClient(
+                host="https://clob.polymarket.com",
+                key=self.private_key,
+                chain_id=137,  # Polygon mainnet
+                signature_type=0,  # EOA (Externally Owned Account)
+                funder=self.wallet_address
+            )
+            api_creds = temp_client.create_or_derive_api_creds()
+            logger.info("✅ API credentials derived from private key")
 
         # Now create Level 2 client with full API credentials for order placement
         self.client = ClobClient(
