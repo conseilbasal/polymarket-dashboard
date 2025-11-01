@@ -165,11 +165,46 @@ def init_copy_trading_tables():
                     raise
 
         db_type = "PostgreSQL" if is_postgres else "SQLite"
-        print(f"[DB INIT] ✓ Copy Trading tables created/verified in {db_type}")
-        print("[DB INIT] ✓ copy_trading_config")
-        print("[DB INIT] ✓ position_snapshots")
-        print("[DB INIT] ✓ pending_copy_orders")
-        print("[DB INIT] ✓ executed_copy_trades")
+
+        # VERIFY tables actually exist
+        print(f"[DB INIT] Verifying tables exist in {db_type}...")
+        with engine.connect() as conn:
+            if is_postgres:
+                # Check table existence in PostgreSQL
+                check_query = text("""
+                    SELECT table_name
+                    FROM information_schema.tables
+                    WHERE table_schema = 'public'
+                    AND table_name IN ('copy_trading_config', 'position_snapshots', 'pending_copy_orders', 'executed_copy_trades')
+                    ORDER BY table_name
+                """)
+            else:
+                # Check table existence in SQLite
+                check_query = text("""
+                    SELECT name
+                    FROM sqlite_master
+                    WHERE type='table'
+                    AND name IN ('copy_trading_config', 'position_snapshots', 'pending_copy_orders', 'executed_copy_trades')
+                    ORDER BY name
+                """)
+
+            result = conn.execute(check_query)
+            existing_tables = [row[0] for row in result]
+
+            expected_tables = ['copy_trading_config', 'executed_copy_trades', 'pending_copy_orders', 'position_snapshots']
+
+            print(f"[DB INIT] Found {len(existing_tables)}/4 tables: {existing_tables}")
+
+            if len(existing_tables) == 4:
+                print(f"[DB INIT] ✓ All Copy Trading tables verified in {db_type}")
+                for table in existing_tables:
+                    print(f"[DB INIT] ✓ {table}")
+            else:
+                missing = set(expected_tables) - set(existing_tables)
+                print(f"[DB INIT ERROR] Missing tables: {missing}")
+                print(f"[DB INIT] Attempting to create missing tables...")
+                # Tables weren't created - this is a critical error
+                return False
 
         return True
 
