@@ -9,6 +9,8 @@ interface PolymarketTrader {
   volume: number
   pnl: number
   profile_image: string
+  total_trades?: number
+  roi?: number
 }
 
 // Generate a unique color based on address
@@ -272,22 +274,23 @@ export default function Leaderboard() {
                   </th>
                   <th className="p-4 text-left">Rank</th>
                   <th className="p-4 text-left">Trader</th>
-                  <th className="p-4 text-right">Volume</th>
                   <th className="p-4 text-right">PnL</th>
+                  <th className="p-4 text-right">Total Trades</th>
+                  <th className="p-4 text-right">ROI</th>
                   <th className="p-4 text-center">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-700">
                 {loading ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-gray-400">
+                    <td colSpan={7} className="p-8 text-center text-gray-400">
                       <RefreshCw className="w-6 h-6 animate-spin mx-auto mb-2" />
                       Loading leaderboard...
                     </td>
                   </tr>
                 ) : filteredTraders.length === 0 ? (
                   <tr>
-                    <td colSpan={6} className="p-8 text-center text-gray-400">
+                    <td colSpan={7} className="p-8 text-center text-gray-400">
                       No traders match your filters
                     </td>
                   </tr>
@@ -330,12 +333,17 @@ export default function Leaderboard() {
                           </div>
                         </div>
                       </td>
+                      <td className="p-4 text-right">
+                        <span className={`font-bold ${trader.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          ${trader.pnl.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                        </span>
+                      </td>
                       <td className="p-4 text-right text-gray-300">
-                        ${trader.volume.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                        {trader.total_trades?.toLocaleString() || '-'}
                       </td>
                       <td className="p-4 text-right">
-                        <span className={trader.pnl >= 0 ? 'text-green-400' : 'text-red-400'}>
-                          ${trader.pnl.toLocaleString(undefined, { maximumFractionDigits: 0 })}
+                        <span className={`font-semibold ${(trader.roi || 0) >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                          {trader.roi !== undefined ? `${trader.roi}%` : '-'}
                         </span>
                       </td>
                       <td className="p-4 text-center">

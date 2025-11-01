@@ -518,13 +518,23 @@ async def get_polymarket_leaderboard(limit: int = 100):
         # Format for frontend
         formatted_leaderboard = []
         for trader in leaderboard:
+            pnl = float(trader.get("pnl", 0))
+            volume = float(trader.get("vol", 0))
+
+            # Calculate ROI: ROI = (PnL / Capital Invested) × 100
+            # Capital Invested ≈ Volume - PnL (approximation)
+            capital_invested = volume - pnl if volume > pnl else volume
+            roi = round((pnl / capital_invested * 100), 1) if capital_invested > 0 else 0
+
             formatted_leaderboard.append({
                 "rank": int(trader.get("rank", 0)),
                 "address": trader.get("user_id", ""),
                 "username": trader.get("user_name", ""),
-                "volume": float(trader.get("vol", 0)),
-                "pnl": float(trader.get("pnl", 0)),
-                "profile_image": trader.get("profile_image", "")
+                "volume": volume,
+                "pnl": pnl,
+                "profile_image": trader.get("profile_image", ""),
+                "roi": roi,
+                "total_trades": None  # Not available from leaderboard API
             })
 
         return {
