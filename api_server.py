@@ -852,6 +852,63 @@ async def get_copy_trading_performance():
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to get copy trading performance: {str(e)}")
 
+
+@app.post("/api/test-order", dependencies=[Depends(get_current_user)])
+async def test_limit_order(
+    token_id: str,
+    price: float = 0.05,  # Default: 5 cents per share
+    amount_usd: float = 2.0  # Default: 2 EUR (~2.2 USD)
+):
+    """
+    TEST ENDPOINT: Place a limit order for testing
+
+    Args:
+        token_id: Market token ID (YES or NO token)
+        price: Price per share (0-1 range, e.g., 0.05 for 5 cents)
+        amount_usd: Amount in USD to spend (default: 2.0)
+
+    Returns:
+        Order details and status
+    """
+    try:
+        from clob_client import PolymarketCLOBClient
+        from py_clob_client.clob_types import OrderType
+
+        # Initialize CLOB client
+        clob_client = PolymarketCLOBClient()
+
+        # Calculate number of shares for the given amount
+        size = amount_usd / price
+
+        # Create limit order
+        order_data = clob_client.create_limit_order(
+            token_id=token_id,
+            side='YES',  # Assuming YES for test
+            order_side='BUY',
+            size=size,
+            price=price
+        )
+
+        # Post the order
+        result = clob_client.post_order(order_data['order'], OrderType.GTC)
+
+        return {
+            "success": True,
+            "message": f"Test order placed: BUY {size:.2f} shares @ ${price:.4f}",
+            "order_details": {
+                "token_id": token_id,
+                "size": size,
+                "price": price,
+                "amount_usd": amount_usd,
+                "order_id": result.get('orderID'),
+                "status": result.get('status')
+            }
+        }
+
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to place test order: {str(e)}")
+
+
 if __name__ == "__main__":
     print("[INFO] Starting Polymarket Copy Trading API Server...")
     print("[INFO] API will be available at http://localhost:8000")
