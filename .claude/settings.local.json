@@ -8,7 +8,11 @@
       "Bash(git filter-branch:*)",
       "Bash(git reflog:*)",
       "Bash(git gc:*)",
-      "Bash(git remote get-url:*)"
+      "Bash(git remote get-url:*)",
+      "Bash(git remote set-url:*)",
+      "Bash(npm install:*)",
+      "Bash(railway login:*)",
+      "Bash(git rev-parse:*)"
     ],
     "deny": [],
     "ask": []
