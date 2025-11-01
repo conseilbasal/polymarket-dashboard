@@ -142,26 +142,27 @@ def init_copy_trading_tables():
         is_postgres = str(engine.url).startswith('postgresql')
         sql_to_use = CREATE_TABLES_POSTGRES if is_postgres else CREATE_TABLES_SQL
 
-        with engine.connect() as conn:
-            # Execute all statements one by one
-            statements = [s.strip() for s in sql_to_use.strip().split(';') if s.strip() and not s.strip().startswith('--')]
+        # Execute each statement in its own transaction
+        statements = [s.strip() for s in sql_to_use.strip().split(';') if s.strip() and not s.strip().startswith('--')]
 
-            for i, statement in enumerate(statements):
-                try:
+        for i, statement in enumerate(statements):
+            try:
+                # Use a new connection for each statement (auto-commit per statement)
+                with engine.connect() as conn:
                     conn.execute(text(statement))
                     conn.commit()
-                except Exception as e:
-                    # If it's a "relation already exists" or "index already exists", it's OK
-                    error_msg = str(e).lower()
-                    if 'already exists' in error_msg or 'duplicate' in error_msg:
-                        continue
-                    # For other errors during INDEX creation, warn but continue
-                    elif 'create index' in statement.lower():
-                        print(f"[DB INIT WARN] Failed to create index (continuing): {e}")
-                        continue
-                    else:
-                        # For table creation errors, re-raise
-                        raise
+            except Exception as e:
+                # If it's a "relation already exists" or "index already exists", it's OK
+                error_msg = str(e).lower()
+                if 'already exists' in error_msg or 'duplicate' in error_msg:
+                    continue
+                # For other errors during INDEX creation, warn but continue
+                elif 'create index' in statement.lower():
+                    print(f"[DB INIT WARN] Failed to create index (continuing): {e}")
+                    continue
+                else:
+                    # For table creation errors, re-raise
+                    raise
 
         db_type = "PostgreSQL" if is_postgres else "SQLite"
         print(f"[DB INIT] ✓ Copy Trading tables created/verified in {db_type}")
