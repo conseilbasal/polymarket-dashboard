@@ -90,10 +90,26 @@ try:
             executed_at TIMESTAMP DEFAULT NOW(),
             pnl FLOAT
         )
+        """,
+
+        # Table 5
+        """
+        CREATE TABLE IF NOT EXISTS pending_accumulation (
+            id SERIAL PRIMARY KEY,
+            user_wallet_address VARCHAR(42) NOT NULL,
+            target_trader_address VARCHAR(100) NOT NULL,
+            market_id VARCHAR(100) NOT NULL,
+            outcome VARCHAR(10) NOT NULL,
+            accumulated_size FLOAT NOT NULL DEFAULT 0,
+            accumulated_value_usd FLOAT NOT NULL DEFAULT 0,
+            last_updated TIMESTAMP DEFAULT NOW(),
+            created_at TIMESTAMP DEFAULT NOW(),
+            UNIQUE(user_wallet_address, target_trader_address, market_id, outcome)
+        )
         """
     ]
 
-    table_names = ['copy_trading_config', 'position_snapshots', 'pending_copy_orders', 'executed_copy_trades']
+    table_names = ['copy_trading_config', 'position_snapshots', 'pending_copy_orders', 'executed_copy_trades', 'pending_accumulation']
 
     for i, sql in enumerate(tables_sql):
         try:
@@ -113,19 +129,19 @@ try:
         SELECT table_name
         FROM information_schema.tables
         WHERE table_schema = 'public'
-        AND table_name IN ('copy_trading_config', 'position_snapshots', 'pending_copy_orders', 'executed_copy_trades')
+        AND table_name IN ('copy_trading_config', 'position_snapshots', 'pending_copy_orders', 'executed_copy_trades', 'pending_accumulation')
         ORDER BY table_name
     """)
 
     tables = cursor.fetchall()
-    print(f"\nTables trouvees: {len(tables)}/4")
+    print(f"\nTables trouvees: {len(tables)}/5")
     for table in tables:
         print(f"  [OK] {table[0]}")
 
-    if len(tables) == 4:
+    if len(tables) == 5:
         print("\n[SUCCESS] Toutes les tables Copy Trading sont creees!")
     else:
-        print(f"\n[WARNING] Seulement {len(tables)}/4 tables creees")
+        print(f"\n[WARNING] Seulement {len(tables)}/5 tables creees")
 
     cursor.close()
     conn.close()
