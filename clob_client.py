@@ -24,6 +24,7 @@ class PolymarketCLOBClient:
         # Get credentials from environment variables
         self.private_key = os.getenv("POLYMARKET_PRIVATE_KEY")
         self.wallet_address = os.getenv("POLYMARKET_WALLET_ADDRESS")
+        self.proxy_address = os.getenv("POLYMARKET_PROXY_ADDRESS")  # Optional proxy wallet
 
         if not self.private_key:
             raise ValueError("POLYMARKET_PRIVATE_KEY environment variable not set")
@@ -51,7 +52,7 @@ class PolymarketCLOBClient:
             host="https://clob.polymarket.com",
             key=self.private_key,
             chain_id=137,  # Polygon mainnet
-            signature_type=0,  # EOA (Externally Owned Account)
+            signature_type=0,  # EOA
             funder=self.wallet_address,
             creds=api_creds  # Add API credentials for Level 2 access
         )
