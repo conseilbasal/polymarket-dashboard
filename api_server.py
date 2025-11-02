@@ -493,7 +493,7 @@ async def get_capital_history_endpoint(trader: str = None, days: int = 30):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
-@app.get("/api/leaderboard/polymarket", dependencies=[Depends(get_current_user)])
+@app.get("/api/leaderboard/polymarket")
 async def get_polymarket_leaderboard(limit: int = 100):
     """
     Get Polymarket leaderboard (top traders by PnL)
