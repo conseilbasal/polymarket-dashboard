@@ -823,7 +823,7 @@ export default function CopyTrading() {
                             )}
                           </td>
                         </tr>
-                        );
+                        )
                       })}
                     </tbody>
                   </table>
