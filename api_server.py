@@ -863,6 +863,132 @@ async def get_copy_trading_performance():
         raise HTTPException(status_code=500, detail=f"Failed to get copy trading performance: {str(e)}")
 
 
+# ====================
+# MARKET EXPLORER ENDPOINTS (PolyDataExplore API)
+# ====================
+
+@app.get("/api/markets/explore")
+async def get_all_markets():
+    """
+    Get all markets from PolyDataExplore API
+    Includes volume, liquidity, open interest data
+    """
+    try:
+        response = requests.get("https://polydataexplore.org/events", timeout=15)
+
+        if response.status_code != 200:
+            raise HTTPException(status_code=503, detail="PolyDataExplore API unavailable")
+
+        events = response.json()
+
+        return {
+            "markets": events,
+            "count": len(events),
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=503, detail=f"Failed to fetch markets: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class MarketFilterRequest(BaseModel):
+    category_exact: str | None = None
+    volume24hr_gt: float | None = None
+    volume1wk_gt: float | None = None
+    volume1mo_gt: float | None = None
+    liquidity_gt: float | None = None
+    openInterest_gt: float | None = None
+    closed: bool | None = None
+    featured: bool | None = None
+
+
+@app.post("/api/markets/filter")
+async def filter_markets(filters: MarketFilterRequest):
+    """
+    Filter markets with advanced criteria
+    Returns markets matching all specified filters
+    """
+    try:
+        # Build filter payload
+        filter_payload = {}
+
+        if filters.category_exact:
+            filter_payload["category_exact"] = filters.category_exact
+        if filters.volume24hr_gt is not None:
+            filter_payload["volume24hr_gt"] = filters.volume24hr_gt
+        if filters.volume1wk_gt is not None:
+            filter_payload["volume1wk_gt"] = filters.volume1wk_gt
+        if filters.volume1mo_gt is not None:
+            filter_payload["volume1mo_gt"] = filters.volume1mo_gt
+        if filters.liquidity_gt is not None:
+            filter_payload["liquidity_gt"] = filters.liquidity_gt
+        if filters.openInterest_gt is not None:
+            filter_payload["openInterest_gt"] = filters.openInterest_gt
+        if filters.closed is not None:
+            filter_payload["closed"] = filters.closed
+        if filters.featured is not None:
+            filter_payload["featured"] = filters.featured
+
+        response = requests.post(
+            "https://polydataexplore.org/events/filter",
+            json=filter_payload,
+            timeout=15
+        )
+
+        if response.status_code != 200:
+            raise HTTPException(status_code=503, detail="PolyDataExplore API unavailable")
+
+        markets = response.json()
+
+        return {
+            "markets": markets,
+            "count": len(markets),
+            "filters_applied": filter_payload,
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=503, detail=f"Failed to filter markets: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+class PriceHistoryRequest(BaseModel):
+    ids: list[int]
+
+
+@app.post("/api/markets/price-history")
+async def get_price_history(request: PriceHistoryRequest):
+    """
+    Get price history for specific market IDs
+    Returns historical price data with timestamps
+    """
+    try:
+        response = requests.post(
+            "https://polydataexplore.org/price-history/filter_id",
+            json={"ids": request.ids},
+            timeout=15
+        )
+
+        if response.status_code != 200:
+            raise HTTPException(status_code=503, detail="PolyDataExplore API unavailable")
+
+        price_history = response.json()
+
+        return {
+            "price_history": price_history,
+            "market_count": len(price_history),
+            "timestamp": datetime.now().isoformat()
+        }
+
+    except requests.exceptions.RequestException as e:
+        raise HTTPException(status_code=503, detail=f"Failed to fetch price history: {str(e)}")
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 @app.post("/api/test-order", dependencies=[Depends(get_current_user)])
 async def test_limit_order(
     token_id: str,

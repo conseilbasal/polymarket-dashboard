@@ -11,9 +11,10 @@ export default function Layout({ children }: LayoutProps) {
 
   const navItems = [
     { path: '/copy-trading', label: 'Copy Trading', icon: Copy },
+    { path: '/markets', label: 'Markets', icon: Activity },
+    { path: '/leaderboard', label: 'Leaderboard', icon: Trophy },
     { path: '/dashboard', label: 'Dashboard', icon: BarChart3 },
     { path: '/trades', label: 'Trades', icon: List },
-    { path: '/leaderboard', label: 'Leaderboard', icon: Trophy },
   ]
 
   const isActive = (path: string) => location.pathname === path

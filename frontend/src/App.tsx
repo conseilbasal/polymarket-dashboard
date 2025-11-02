@@ -5,6 +5,7 @@ import TraderDetail from './pages/TraderDetail'
 import Leaderboard from './pages/Leaderboard'
 import AllTrades from './pages/AllTrades'
 import CopyTrading from './pages/CopyTrading'
+import MarketExplorer from './pages/MarketExplorer'
 
 function App() {
   return (
@@ -17,6 +18,7 @@ function App() {
           <Route path="/trader/:address" element={<TraderDetail />} />
           <Route path="/leaderboard" element={<Leaderboard />} />
           <Route path="/trades" element={<AllTrades />} />
+          <Route path="/markets" element={<MarketExplorer />} />
         </Routes>
       </Layout>
     </Router>
