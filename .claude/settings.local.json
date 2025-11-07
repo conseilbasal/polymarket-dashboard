@@ -16,7 +16,9 @@
       "Bash(railway:*)",
       "Bash(vercel login)",
       "Bash(vercel:*)",
-      "Bash(copy /b api_server.py +,,)"
+      "Bash(copy /b api_server.py +,,)",
+      "Bash(timeout /t 3)",
+      "Bash(timeout 30 python:*)"
     ],
     "deny": [],
     "ask": []

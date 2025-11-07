@@ -1,6 +1,6 @@
 import { useState, useEffect } from 'react';
-import { RefreshCw, TrendingUp, TrendingDown, Activity, ExternalLink, Eye, EyeOff, ChevronUp, ChevronDown, Clock, X, Check, Search } from 'lucide-react';
-import { copyTradingApi, type CopyTradingData, type TraderMetrics, type ComparisonAction } from '../services/copyTradingApi';
+import { RefreshCw, TrendingUp, TrendingDown, Activity, ExternalLink, Eye, EyeOff, ChevronUp, ChevronDown, Clock, X, Check, Search, User } from 'lucide-react';
+import { copyTradingApi, type CopyTradingData, type TraderMetrics, type ComparisonAction, type Trader } from '../services/copyTradingApi';
 
 interface PendingOrder {
   market: string;
@@ -52,6 +52,29 @@ export default function CopyTrading() {
     return saved ? new Set(JSON.parse(saved)) : new Set();
   });
   const [searchTerm, setSearchTerm] = useState('');
+  const [hideMissingPrices, setHideMissingPrices] = useState(() => {
+    const saved = localStorage.getItem('hideMissingPrices');
+    return saved ? JSON.parse(saved) : false;
+  });
+  const [filterSmallDeltas, setFilterSmallDeltas] = useState(() => {
+    const saved = localStorage.getItem('filterSmallDeltas');
+    return saved ? JSON.parse(saved) : false;
+  });
+
+  // Profile selection states
+  const [traders, setTraders] = useState<Trader[]>([]);
+  const [selectedProfile, setSelectedProfile] = useState(() => {
+    const saved = localStorage.getItem('selectedProfile');
+    return saved || 'Shunky';
+  });
+
+  // Handle profile change
+  const handleProfileChange = (profileName: string) => {
+    setSelectedProfile(profileName);
+    localStorage.setItem('selectedProfile', profileName);
+    // Trigger data refresh with new profile
+    setLoading(true);
+  };
 
   // Toggle price visibility
   const togglePrices = () => {
@@ -210,6 +233,20 @@ export default function CopyTrading() {
       filtered = filtered.filter(action => action.action === actionFilter);
     }
 
+    // Filter missing/zero prices
+    if (hideMissingPrices) {
+      filtered = filtered.filter(action => action.current_price > 0);
+    }
+
+    // Filter small deltas (between -5 and 5, exclusive)
+    if (filterSmallDeltas) {
+      filtered = filtered.filter(action =>
+        Math.abs(action.delta_shares) < 5 || Math.abs(action.delta_shares) >= 5
+      );
+      // Actually filter: keep only values >= 5 or <= -5
+      filtered = filtered.filter(action => Math.abs(action.delta_shares) >= 5);
+    }
+
     // Then sort
     if (!sortField) return filtered;
 
@@ -250,7 +287,7 @@ export default function CopyTrading() {
         console.log('[REFRESH] Success:', refreshResult);
       }
 
-      const result = await copyTradingApi.getComparison('25usdc', 'Shunky', copyPercentage);
+      const result = await copyTradingApi.getComparison('25usdc', selectedProfile, copyPercentage);
       setData(result);
       setLastUpdate(new Date());
     } catch (error) {
@@ -261,10 +298,19 @@ export default function CopyTrading() {
     }
   };
 
-  // Initial fetch
+  // Load traders list
+  useEffect(() => {
+    const loadTraders = async () => {
+      const tradersList = await copyTradingApi.getTraders();
+      setTraders(tradersList);
+    };
+    loadTraders();
+  }, []);
+
+  // Initial fetch and refetch on profile/percentage change
   useEffect(() => {
     fetchData(false);
-  }, [copyPercentage]);
+  }, [copyPercentage, selectedProfile]);
 
   // Apply new percentage
   const handleApplyPercentage = () => {
@@ -343,69 +389,144 @@ export default function CopyTrading() {
 
           <div className="h-px bg-gray-700 my-6" />
 
-          {/* Display Options */}
+          {/* Profile Selector */}
           <div className="mb-6">
-            <h3 className="text-sm font-semibold text-gray-400 mb-3">👁️ Display</h3>
-            <button
-              onClick={togglePrices}
-              className="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded-lg text-xs font-medium text-gray-300 transition-all flex items-center justify-between"
+            <h3 className="text-sm font-semibold text-gray-400 mb-3 flex items-center gap-2">
+              <User size={16} /> My Profile
+            </h3>
+            <select
+              value={selectedProfile}
+              onChange={(e) => handleProfileChange(e.target.value)}
+              className="w-full px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-sm text-gray-100 focus:outline-none focus:border-blue-500 transition-colors"
             >
-              <span>Show Prices</span>
-              {showPrices ? <Eye size={16} /> : <EyeOff size={16} />}
-            </button>
+              {traders.map((trader) => (
+                <option key={trader.name} value={trader.name}>
+                  {trader.name}
+                </option>
+              ))}
+            </select>
+            {traders.length > 0 && (
+              <div className="mt-2 text-xs text-gray-500">
+                Address: {traders.find(t => t.name === selectedProfile)?.address?.substring(0, 10)}...
+              </div>
+            )}
           </div>
 
           <div className="h-px bg-gray-700 my-6" />
 
-          {/* Metrics Table */}
+          {/* Position Counter */}
           {data && (
-            <div>
-              <h3 className="text-sm font-semibold text-gray-400 mb-3">📊 Metrics</h3>
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs">
-                  <thead className="text-gray-500 border-b border-gray-700">
-                    <tr>
-                      <th className="text-left py-2"></th>
-                      <th className="text-right py-2 px-2">25usdc</th>
-                      <th className="text-right py-2 px-2">Shunky</th>
-                      <th className="text-right py-2 px-2">Δ</th>
-                    </tr>
-                  </thead>
-                  <tbody className="text-gray-300">
-                    <tr className="border-b border-gray-700/50">
-                      <td className="py-2 font-semibold">Pos</td>
-                      <td className="text-right px-2">{data.metrics_target.positions}</td>
-                      <td className="text-right px-2">{data.metrics_user.positions}</td>
-                      <td className="text-right px-2 text-yellow-400">
-                        {data.metrics_delta.positions > 0 ? '+' : ''}
-                        {data.metrics_delta.positions}
-                      </td>
-                    </tr>
-                    <tr className="border-b border-gray-700/50">
-                      <td className="py-2 font-semibold">Exp</td>
-                      <td className="text-right px-2">${data.metrics_target.exposure.toLocaleString()}</td>
-                      <td className="text-right px-2">${data.metrics_user.exposure.toLocaleString()}</td>
-                      <td className="text-right px-2 text-yellow-400">
-                        ${Math.abs(data.metrics_delta.exposure).toLocaleString()}
-                      </td>
-                    </tr>
-                    <tr>
-                      <td className="py-2 font-semibold">PnL</td>
-                      <td className={`text-right px-2 ${data.metrics_target.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        ${data.metrics_target.pnl.toLocaleString()}
-                      </td>
-                      <td className={`text-right px-2 ${data.metrics_user.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        ${data.metrics_user.pnl.toLocaleString()}
-                      </td>
-                      <td className={`text-right px-2 ${data.metrics_delta.pnl >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                        ${Math.abs(data.metrics_delta.pnl).toLocaleString()}
-                      </td>
-                    </tr>
-                  </tbody>
-                </table>
+            <div className="mb-6 p-3 bg-gray-900/50 rounded-lg border border-gray-700">
+              <div className="text-xs text-gray-400 text-center">
+                <span className="font-semibold text-blue-400">{getFilteredAndSortedActions(data.actions).length}</span>
+                <span className="mx-1">of</span>
+                <span className="font-semibold text-blue-400">{data.actions.length}</span>
+                <span className="ml-1">positions displayed</span>
+                {actionFilter === 'BUY' && (
+                  <span className="ml-2 px-2 py-0.5 bg-green-600/20 text-green-400 rounded text-[10px] font-medium">BUY</span>
+                )}
+                {actionFilter === 'SELL' && (
+                  <span className="ml-2 px-2 py-0.5 bg-red-600/20 text-red-400 rounded text-[10px] font-medium">SELL</span>
+                )}
+                {actionFilter === 'IGNORED' && (
+                  <span className="ml-2 px-2 py-0.5 bg-orange-600/20 text-orange-400 rounded text-[10px] font-medium">IGNORED</span>
+                )}
               </div>
             </div>
           )}
+
+          {/* Display Options */}
+          <div className="mb-6">
+            <h3 className="text-sm font-semibold text-gray-400 mb-3">👁️ Display & Filters</h3>
+            <div className="space-y-2">
+              <button
+                onClick={togglePrices}
+                className="w-full px-3 py-2 bg-gray-700 hover:bg-gray-600 border border-gray-600 rounded-lg text-sm font-medium text-gray-300 transition-all flex items-center justify-between"
+              >
+                <span>Show Prices</span>
+                {showPrices ? <Eye size={16} /> : <EyeOff size={16} />}
+              </button>
+              <button
+                onClick={() => {
+                  const newValue = !hideMissingPrices;
+                  setHideMissingPrices(newValue);
+                  localStorage.setItem('hideMissingPrices', JSON.stringify(newValue));
+                }}
+                className={`w-full px-3 py-2 border rounded-lg text-sm font-medium transition-all flex items-center justify-between ${
+                  hideMissingPrices
+                    ? 'bg-blue-600 hover:bg-blue-500 border-blue-500 text-white'
+                    : 'bg-gray-700 hover:bg-gray-600 border-gray-600 text-gray-300'
+                }`}
+              >
+                <span>Hide Missing Prices</span>
+                {hideMissingPrices ? <Check size={16} /> : <X size={16} />}
+              </button>
+              <button
+                onClick={() => {
+                  const newValue = !filterSmallDeltas;
+                  setFilterSmallDeltas(newValue);
+                  localStorage.setItem('filterSmallDeltas', JSON.stringify(newValue));
+                }}
+                className={`w-full px-3 py-2 border rounded-lg text-sm font-medium transition-all flex items-center justify-between ${
+                  filterSmallDeltas
+                    ? 'bg-blue-600 hover:bg-blue-500 border-blue-500 text-white'
+                    : 'bg-gray-700 hover:bg-gray-600 border-gray-600 text-gray-300'
+                }`}
+              >
+                <span>Filter |Δ| &lt; 5</span>
+                {filterSmallDeltas ? <Check size={16} /> : <X size={16} />}
+              </button>
+
+              {(() => {
+                const stats = data ? getFilteredStats(data.actions) : { totalCount: 0, totalAmount: 0, ignoredCount: 0, ignoredAmount: 0 };
+                return (
+                  <>
+                    {/* Total Card */}
+                    <button
+                      onClick={() => handleActionFilter('ALL')}
+                      className={`w-full rounded-lg px-3 py-2 border transition-all ${
+                        actionFilter === 'ALL'
+                          ? 'bg-blue-600/20 border-blue-500 ring-1 ring-blue-500'
+                          : 'bg-gray-700/30 border-gray-600 hover:border-blue-500/50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <Activity size={16} className="text-blue-400" />
+                          <span className="text-sm text-gray-400 font-medium">Total</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-base font-bold text-blue-400">{stats.totalCount}</div>
+                          <div className="text-base font-bold text-blue-400">${stats.totalAmount.toFixed(0)}</div>
+                        </div>
+                      </div>
+                    </button>
+
+                    {/* Ignored Card */}
+                    <button
+                      onClick={() => handleActionFilter('IGNORED')}
+                      className={`w-full rounded-lg px-3 py-2 border transition-all ${
+                        actionFilter === 'IGNORED'
+                          ? 'bg-orange-600/20 border-orange-500 ring-1 ring-orange-500'
+                          : 'bg-gray-700/30 border-gray-600 hover:border-orange-500/50'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <EyeOff size={16} className="text-orange-400" />
+                          <span className="text-sm text-gray-400 font-medium">Ignored</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <div className="text-base font-bold text-orange-400">{stats.ignoredCount}</div>
+                          <div className="text-base font-bold text-orange-400">${stats.ignoredAmount.toFixed(0)}</div>
+                        </div>
+                      </div>
+                    </button>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
 
           {/* Last Update */}
           <div className="mt-6 text-xs text-gray-500 text-center">
@@ -418,156 +539,93 @@ export default function CopyTrading() {
         <div className="flex-1 p-6">
           {data && (
             <>
-              {/* Stats Cards */}
-              <div className="flex gap-4 mb-6" key={`stats-${copyPercentage}-${lastUpdate.getTime()}`}>
-                {(() => {
-                  const stats = getFilteredStats(data.actions);
-                  return (
-                    <>
-                      <button
-                        onClick={() => handleActionFilter('BUY')}
-                        className={`bg-gray-800 rounded-xl px-4 py-3 border transition-all hover:scale-105 cursor-pointer ${
-                          actionFilter === 'BUY'
-                            ? 'border-green-500 shadow-lg shadow-green-500/30'
-                            : 'border-gray-700 hover:border-green-500/50'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <TrendingUp size={20} className="text-green-400" />
-                          <span className="text-sm text-gray-400 whitespace-nowrap">To Buy</span>
-                          <div className="text-2xl font-bold text-green-400">{stats.buyCount}</div>
-                          <div className="text-sm text-gray-500">${stats.buyAmount.toFixed(0)}</div>
-                          {actionFilter === 'BUY' && (
-                            <div className="ml-2 px-2 py-0.5 bg-green-500/20 rounded text-xs text-green-400 font-medium">Active</div>
-                          )}
-                        </div>
-                      </button>
-
-                      <button
-                        onClick={() => handleActionFilter('SELL')}
-                        className={`bg-gray-800 rounded-xl px-4 py-3 border transition-all hover:scale-105 cursor-pointer ${
-                          actionFilter === 'SELL'
-                            ? 'border-red-500 shadow-lg shadow-red-500/30'
-                            : 'border-gray-700 hover:border-red-500/50'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <TrendingDown size={20} className="text-red-400" />
-                          <span className="text-sm text-gray-400 whitespace-nowrap">To Sell</span>
-                          <div className="text-2xl font-bold text-red-400">{stats.sellCount}</div>
-                          <div className="text-sm text-gray-500">${stats.sellAmount.toFixed(0)}</div>
-                          {actionFilter === 'SELL' && (
-                            <div className="ml-2 px-2 py-0.5 bg-red-500/20 rounded text-xs text-red-400 font-medium">Active</div>
-                          )}
-                        </div>
-                      </button>
-
-                      <button
-                        onClick={() => handleActionFilter('ALL')}
-                        className={`bg-gray-800 rounded-xl px-4 py-3 border transition-all hover:scale-105 cursor-pointer ${
-                          actionFilter === 'ALL'
-                            ? 'border-blue-500 shadow-lg shadow-blue-500/30'
-                            : 'border-gray-700 hover:border-blue-500/50'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <Activity size={20} className="text-blue-400" />
-                          <span className="text-sm text-gray-400 whitespace-nowrap">Total Actions</span>
-                          <div className="text-2xl font-bold text-blue-400">{stats.totalCount}</div>
-                          <div className="text-sm text-gray-500">${stats.totalAmount.toFixed(0)}</div>
-                          {actionFilter === 'ALL' && (
-                            <div className="ml-2 px-2 py-0.5 bg-blue-500/20 rounded text-xs text-blue-400 font-medium">Active</div>
-                          )}
-                        </div>
-                      </button>
-
-                      <button
-                        onClick={() => handleActionFilter('IGNORED')}
-                        className={`bg-gray-800 rounded-xl px-4 py-3 border transition-all hover:scale-105 cursor-pointer ${
-                          actionFilter === 'IGNORED'
-                            ? 'border-orange-500 shadow-lg shadow-orange-500/30'
-                            : 'border-gray-700 hover:border-orange-500/50'
-                        }`}
-                      >
-                        <div className="flex items-center gap-3">
-                          <EyeOff size={20} className="text-orange-400" />
-                          <span className="text-sm text-gray-400 whitespace-nowrap">Ignored Markets</span>
-                          <div className="text-2xl font-bold text-orange-400">{stats.ignoredCount}</div>
-                          <div className="text-sm text-gray-500">${stats.ignoredAmount.toFixed(0)}</div>
-                          {actionFilter === 'IGNORED' && (
-                            <div className="ml-2 px-2 py-0.5 bg-orange-500/20 rounded text-xs text-orange-400 font-medium">Active</div>
-                          )}
-                        </div>
-                      </button>
-                    </>
-                  );
-                })()}
-              </div>
-
               {/* Actions Table */}
               <div className="bg-gray-800 rounded-xl border border-gray-700 overflow-hidden">
-                <div className="p-4 border-b border-gray-700">
-                  {/* Search Bar */}
-                  <div className="relative mb-3">
-                    <Search size={16} className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500" />
-                    <input
-                      type="text"
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                      placeholder="Search markets..."
-                      className="pl-9 pr-3 py-1.5 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none w-64"
-                    />
-                    {searchTerm && (
-                      <button
-                        onClick={() => setSearchTerm('')}
-                        className="absolute right-2 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300"
-                      >
-                        <X size={14} />
-                      </button>
-                    )}
-                  </div>
-                  <p className="text-sm text-gray-400">
-                    {getFilteredAndSortedActions(data.actions).length} of {data.actions.length} positions displayed
-                    {actionFilter === 'BUY' && (
-                      <span className="ml-2 px-2 py-0.5 bg-green-600/20 text-green-400 rounded text-xs font-medium">
-                        BUY only
-                      </span>
-                    )}
-                    {actionFilter === 'SELL' && (
-                      <span className="ml-2 px-2 py-0.5 bg-red-600/20 text-red-400 rounded text-xs font-medium">
-                        SELL only
-                      </span>
-                    )}
-                    {actionFilter === 'IGNORED' && (
-                      <span className="ml-2 px-2 py-0.5 bg-orange-600/20 text-orange-400 rounded text-xs font-medium">
-                        Ignored markets only
-                      </span>
-                    )}
-                    {searchTerm && (
-                      <span className="ml-2 px-2 py-0.5 bg-blue-600/20 text-blue-400 rounded text-xs font-medium">
-                        Searching: "{searchTerm}"
-                      </span>
-                    )}
-                  </p>
-                </div>
-
                 <div className="overflow-x-auto">
-                  <table className="w-full">
+                  <table className="w-full" style={{ tableLayout: 'auto' }}>
                     <thead className="bg-gray-750">
-                      <tr className="text-left text-xs text-gray-400 border-b border-gray-700">
-                        <th
-                          className="px-4 py-3 font-medium cursor-pointer hover:bg-gray-700/50 transition-colors"
-                          onClick={() => handleSort('market')}
-                        >
-                          <div className="flex items-center gap-1">
-                            Market
-                            {sortField === 'market' && (
-                              sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                            )}
+                      {/* Row 1: Trader cards */}
+                      <tr>
+                        {/* Block 1: General columns - no card */}
+                        <th className="px-0 py-0 border-b-0" rowSpan={1}></th>
+                        <th className="px-0 py-0 border-b-0" rowSpan={1}></th>
+                        {showPrices && <th className="px-0 py-0 border-b-0" rowSpan={1}></th>}
+                        <th className="px-0 py-0 border-b-0" rowSpan={1}></th>
+
+                        {/* Block 2: 25usdc Card - spans across Price, Shares, PnL */}
+                        <th className="px-0 py-0 pb-0 border-b-0" colSpan={showPrices ? 3 : 2}>
+                          <div className="bg-gradient-to-b from-blue-900/60 via-blue-900/40 to-transparent border-x-2 border-t-2 border-b-0 border-blue-600/80 rounded-t-lg shadow-[0_-2px_20px_rgba(37,99,235,0.4)] px-4 py-2">
+                            <div className="flex items-center justify-center gap-4">
+                              <div className="text-base text-blue-200 font-bold">25usdc</div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] text-blue-300/70 uppercase tracking-wider">Exposure</span>
+                                <span className="text-sm font-bold text-blue-300/70">${Math.round(data.metrics_target.exposure).toLocaleString()}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] text-blue-300/70 uppercase tracking-wider">PnL</span>
+                                <span className="text-sm font-bold text-blue-300/70">
+                                  {data.metrics_target.pnl >= 0 ? '+' : '-'}${Math.round(Math.abs(data.metrics_target.pnl)).toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </th>
+
+                        {/* Block 3: Shunky Card - spans across Price, Shares, PnL, Delta, Pending */}
+                        <th className="px-0 py-0 pb-0 border-b-0" colSpan={showPrices ? 5 : 4}>
+                          <div className="bg-gradient-to-b from-purple-900/60 via-purple-900/40 to-transparent border-x-2 border-t-2 border-b-0 border-purple-600/80 rounded-t-lg shadow-[0_-2px_20px_rgba(168,85,247,0.4)] px-4 py-2">
+                            <div className="flex items-center justify-center gap-4">
+                              <div className="text-base text-purple-200 font-bold">Shunky</div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] text-purple-300/70 uppercase tracking-wider">Exposure</span>
+                                <span className="text-sm font-bold text-purple-300/70">${Math.round(data.metrics_user.exposure).toLocaleString()}</span>
+                              </div>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-[10px] text-purple-300/70 uppercase tracking-wider">PnL</span>
+                                <span className="text-sm font-bold text-purple-300/70">
+                                  {data.metrics_user.pnl >= 0 ? '+' : '-'}${Math.round(Math.abs(data.metrics_user.pnl)).toLocaleString()}
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+                        </th>
+                      </tr>
+
+                      {/* Row 2: Column headers */}
+                      <tr className="text-center text-sm text-gray-400 border-b border-gray-700">
+                        <th className="px-3 py-3 font-medium text-left">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="flex items-center gap-1 cursor-pointer hover:text-gray-200 transition-colors flex-shrink-0"
+                              onClick={() => handleSort('market')}
+                            >
+                              <span>Market</span>
+                              {sortField === 'market' && (
+                                sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                              )}
+                            </div>
+                            <div className="relative" style={{ width: '120px' }}>
+                              <Search size={12} className="absolute left-2 top-1/2 transform -translate-y-1/2 text-gray-500" />
+                              <input
+                                type="text"
+                                value={searchTerm}
+                                onChange={(e) => setSearchTerm(e.target.value)}
+                                placeholder="Search..."
+                                className="pl-6 pr-5 py-1 bg-gray-900 border border-gray-700 rounded text-xs text-white placeholder-gray-500 focus:border-blue-500 focus:outline-none w-full"
+                              />
+                              {searchTerm && (
+                                <button
+                                  onClick={() => setSearchTerm('')}
+                                  className="absolute right-1 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-gray-300"
+                                >
+                                  <X size={10} />
+                                </button>
+                              )}
+                            </div>
                           </div>
                         </th>
                         <th
-                          className="px-4 py-3 font-medium cursor-pointer hover:bg-gray-700/50 transition-colors"
+                          className="px-3 py-3 font-medium cursor-pointer hover:bg-gray-700/50 transition-colors"
                           onClick={() => handleSort('side')}
                         >
                           <div className="flex items-center gap-1">
@@ -577,8 +635,31 @@ export default function CopyTrading() {
                             )}
                           </div>
                         </th>
+                        {showPrices && (
+                          <th
+                            className="px-3 py-3 font-medium cursor-pointer hover:bg-gray-700/50 transition-colors"
+                            onClick={() => handleSort('current_price')}
+                          >
+                            <div className="flex items-center justify-center gap-1">
+                              Price
+                              {sortField === 'current_price' && (
+                                sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                              )}
+                            </div>
+                          </th>
+                        )}
+                        {showPrices && (
+                          <th className="px-3 py-3 font-medium text-center">
+                            Bid/Ask
+                          </th>
+                        )}
+                        {showPrices && (
+                          <th className="px-3 py-3 font-medium text-center">
+                            Spread
+                          </th>
+                        )}
                         <th
-                          className="px-4 py-3 font-medium cursor-pointer hover:bg-gray-700/50 transition-colors"
+                          className="px-3 py-3 font-medium cursor-pointer hover:bg-gray-700/50 transition-colors"
                           onClick={() => handleSort('action')}
                         >
                           <div className="flex items-center gap-1">
@@ -588,38 +669,14 @@ export default function CopyTrading() {
                             )}
                           </div>
                         </th>
+                        {/* 25usdc columns with blue tint and left border */}
                         {showPrices && (
                           <th
-                            className="px-4 py-3 font-medium text-right cursor-pointer hover:bg-gray-700/50 transition-colors"
-                            onClick={() => handleSort('current_price')}
-                          >
-                            <div className="flex items-center justify-end gap-1">
-                              Current Price
-                              {sortField === 'current_price' && (
-                                sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                              )}
-                            </div>
-                          </th>
-                        )}
-                        <th
-                          className="px-4 py-3 font-medium text-right cursor-pointer hover:bg-gray-700/50 transition-colors"
-                          onClick={() => handleSort('delta_invested')}
-                        >
-                          <div className="flex items-center justify-end gap-1">
-                            Amount $
-                            {sortField === 'delta_invested' && (
-                              sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                            )}
-                          </div>
-                        </th>
-                        {/* 25usdc columns with blue tint */}
-                        {showPrices && (
-                          <th
-                            className="px-4 py-3 font-medium text-right bg-blue-900/10 text-blue-300 cursor-pointer hover:bg-blue-900/20 transition-colors"
+                            className="px-4 py-3 font-medium bg-blue-900/10 text-blue-300 cursor-pointer hover:bg-blue-900/20 transition-colors border-l-2 border-blue-600/60"
                             onClick={() => handleSort('avg_price_25usdc')}
                           >
-                            <div className="flex items-center justify-end gap-1">
-                              Avg Price 25usdc
+                            <div className="flex items-center justify-center gap-1">
+                              Price
                               {sortField === 'avg_price_25usdc' && (
                                 sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
                               )}
@@ -627,35 +684,35 @@ export default function CopyTrading() {
                           </th>
                         )}
                         <th
-                          className="px-4 py-3 font-medium text-right bg-blue-900/10 text-blue-300 cursor-pointer hover:bg-blue-900/20 transition-colors"
-                          onClick={() => handleSort('pnl_25usdc')}
-                        >
-                          <div className="flex items-center justify-end gap-1">
-                            PnL 25usdc
-                            {sortField === 'pnl_25usdc' && (
-                              sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                            )}
-                          </div>
-                        </th>
-                        <th
-                          className="px-4 py-3 font-medium text-right bg-blue-900/10 text-blue-300 cursor-pointer hover:bg-blue-900/20 transition-colors"
+                          className={`px-4 py-3 font-medium bg-blue-900/10 text-blue-300 cursor-pointer hover:bg-blue-900/20 transition-colors ${!showPrices ? 'border-l-2 border-blue-600/60' : ''}`}
                           onClick={() => handleSort('target_size')}
                         >
-                          <div className="flex items-center justify-end gap-1">
-                            Target
+                          <div className="flex items-center justify-center gap-1">
+                            Shares
                             {sortField === 'target_size' && (
                               sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
                             )}
                           </div>
                         </th>
-                        {/* Shunky columns with green tint */}
+                        <th
+                          className="px-4 py-3 font-medium bg-blue-900/10 text-blue-300 cursor-pointer hover:bg-blue-900/20 transition-colors border-r-2 border-blue-600/60"
+                          onClick={() => handleSort('pnl_25usdc')}
+                        >
+                          <div className="flex items-center justify-center gap-1">
+                            PnL
+                            {sortField === 'pnl_25usdc' && (
+                              sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                            )}
+                          </div>
+                        </th>
+                        {/* Shunky columns with purple tint and borders */}
                         {showPrices && (
                           <th
-                            className="px-4 py-3 font-medium text-right bg-green-900/10 text-green-300 cursor-pointer hover:bg-green-900/20 transition-colors"
+                            className="px-4 py-3 font-medium bg-purple-900/10 text-purple-300 cursor-pointer hover:bg-purple-900/20 transition-colors border-l-2 border-purple-600/60"
                             onClick={() => handleSort('avg_price_shunky')}
                           >
-                            <div className="flex items-center justify-end gap-1">
-                              Avg Price Shunky
+                            <div className="flex items-center justify-center gap-1">
+                              Price
                               {sortField === 'avg_price_shunky' && (
                                 sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
                               )}
@@ -663,39 +720,39 @@ export default function CopyTrading() {
                           </th>
                         )}
                         <th
-                          className="px-4 py-3 font-medium text-right bg-green-900/10 text-green-300 cursor-pointer hover:bg-green-900/20 transition-colors"
-                          onClick={() => handleSort('pnl_shunky')}
-                        >
-                          <div className="flex items-center justify-end gap-1">
-                            PnL Shunky
-                            {sortField === 'pnl_shunky' && (
-                              sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
-                            )}
-                          </div>
-                        </th>
-                        <th
-                          className="px-4 py-3 font-medium text-right bg-green-900/10 text-green-300 cursor-pointer hover:bg-green-900/20 transition-colors"
+                          className={`px-4 py-3 font-medium text-right bg-purple-900/10 text-purple-300 cursor-pointer hover:bg-purple-900/20 transition-colors ${!showPrices ? 'border-l-2 border-purple-600/60' : ''}`}
                           onClick={() => handleSort('size_shunky')}
                         >
                           <div className="flex items-center justify-end gap-1">
-                            Current
+                            Shares
                             {sortField === 'size_shunky' && (
                               sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
                             )}
                           </div>
                         </th>
                         <th
-                          className="px-4 py-3 font-medium text-right cursor-pointer hover:bg-gray-700/50 transition-colors"
-                          onClick={() => handleSort('delta_shares')}
+                          className="px-4 py-3 font-medium text-right bg-purple-900/10 text-purple-300 cursor-pointer hover:bg-purple-900/20 transition-colors"
+                          onClick={() => handleSort('pnl_shunky')}
                         >
                           <div className="flex items-center justify-end gap-1">
+                            PnL
+                            {sortField === 'pnl_shunky' && (
+                              sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
+                            )}
+                          </div>
+                        </th>
+                        <th
+                          className="px-4 py-3 font-medium bg-purple-900/10 text-purple-300 cursor-pointer hover:bg-purple-900/20 transition-colors"
+                          onClick={() => handleSort('delta_shares')}
+                        >
+                          <div className="flex items-center justify-center gap-1">
                             Δ Shares
                             {sortField === 'delta_shares' && (
                               sortDirection === 'asc' ? <ChevronUp size={14} /> : <ChevronDown size={14} />
                             )}
                           </div>
                         </th>
-                        <th className="px-4 py-3 font-medium text-center">
+                        <th className="px-4 py-3 font-medium text-center bg-purple-900/10 text-purple-300 border-r-2 border-purple-600/60">
                           Pending Order
                         </th>
                       </tr>
@@ -714,9 +771,9 @@ export default function CopyTrading() {
                               : ''
                           }`}
                         >
-                          <td className="px-4 py-2 max-w-md" title={action.market}>
+                          <td className="px-3 py-2 text-left" title={action.market}>
                             <div className="flex items-center gap-2">
-                              <span className="truncate">{action.market.substring(0, 60)}</span>
+                              <span className="truncate text-gray-400 text-[14px]">{action.market.substring(0, 60)}</span>
                               {actionFilter === 'IGNORED' ? (
                                 <button
                                   onClick={(e) => {
@@ -739,68 +796,80 @@ export default function CopyTrading() {
                               )}
                             </div>
                           </td>
-                          <td className="px-4 py-2">
-                            <span className="px-2 py-1 rounded text-xs bg-gray-700 text-gray-300">
-                              {action.side}
-                            </span>
-                          </td>
-                          <td className="px-4 py-2">
-                            <a
-                              href={generatePolymarketUrl(action.market)}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-all cursor-pointer ${
-                                action.action === 'BUY'
-                                  ? 'bg-green-600/15 text-green-400 hover:bg-green-600/25'
-                                  : action.action === 'SELL'
-                                  ? 'bg-red-600/15 text-red-400 hover:bg-red-600/25'
-                                  : 'bg-gray-700 text-gray-300'
-                              }`}
-                            >
-                              {action.action === 'BUY' ? 'BUY' : 'SELL'}
-                              <ExternalLink size={11} className="opacity-60" />
-                            </a>
+                          <td className="px-3 py-2 text-center">
+                            <div className="flex justify-center">
+                              <span className="px-2 py-1 rounded text-[13px] bg-gray-700 text-gray-300">
+                                {action.side}
+                              </span>
+                            </div>
                           </td>
                           {showPrices && (
-                            <td className="px-4 py-2 text-right font-mono text-cyan-400 font-semibold">
+                            <td className="px-3 py-2 text-center font-mono text-gray-400 text-[15px]">
                               {action.current_price ? (action.current_price * 100).toFixed(1) : '-'}
                             </td>
                           )}
-                          <td className="px-4 py-2 text-right font-mono">
-                            ${action.delta_invested.toFixed(2)}
-                          </td>
-                          {/* 25usdc columns */}
                           {showPrices && (
-                            <td className="px-4 py-2 text-right font-mono text-gray-400 bg-blue-900/5">
+                            <td className="px-3 py-2 text-center font-mono text-gray-400 text-[15px]">
+                              {action.best_bid !== null && action.best_ask !== null
+                                ? `${(action.best_bid * 100).toFixed(1)} / ${(action.best_ask * 100).toFixed(1)}`
+                                : '-'}
+                            </td>
+                          )}
+                          {showPrices && (
+                            <td className="px-3 py-2 text-center font-mono text-gray-400 text-[15px]">
+                              {action.spread !== null
+                                ? `${(action.spread * 100).toFixed(1)}¢`
+                                : '-'}
+                            </td>
+                          )}
+                          <td className="px-3 py-2 text-center">
+                            <div className="flex justify-center">
+                              <a
+                                href={generatePolymarketUrl(action.market)}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className={`inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium transition-all cursor-pointer ${
+                                  action.action === 'BUY'
+                                    ? 'bg-green-600/15 text-green-400 hover:bg-green-600/25'
+                                    : action.action === 'SELL'
+                                    ? 'bg-red-600/15 text-red-400 hover:bg-red-600/25'
+                                    : 'bg-gray-700 text-gray-300'
+                                }`}
+                              >
+                                {action.action === 'BUY' ? 'BUY' : 'SELL'}
+                                <ExternalLink size={11} className="opacity-60" />
+                              </a>
+                            </div>
+                          </td>
+                          {/* 25usdc columns - Bloc 2 with borders */}
+                          {showPrices && (
+                            <td className="px-4 py-2 text-center font-mono text-gray-400 bg-blue-900/5 border-l-2 border-blue-600/60">
                               {(action.avg_price_25usdc * 100).toFixed(1)}
                             </td>
                           )}
-                          <td className={`px-4 py-2 text-right font-mono bg-blue-900/5 ${action.pnl_25usdc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            ${action.pnl_25usdc?.toFixed(2) || '0.00'}
-                          </td>
-                          <td className="px-4 py-2 text-right font-mono bg-blue-900/5 text-blue-300">
+                          <td className={`px-4 py-2 text-center font-mono bg-blue-900/5 text-gray-400 text-[15px] ${!showPrices ? 'border-l-2 border-blue-600/60' : ''}`}>
                             {action.target_size.toFixed(0)}
                           </td>
-                          {/* Shunky columns */}
+                          <td className={`px-4 py-2 text-center font-mono bg-blue-900/5 border-r-2 border-blue-600/60 text-[15px] ${action.pnl_25usdc >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            ${Math.round(action.pnl_25usdc || 0).toLocaleString()}
+                          </td>
+                          {/* Shunky columns - Bloc 3 with borders */}
                           {showPrices && (
-                            <td className="px-4 py-2 text-right font-mono text-gray-400 bg-green-900/5">
+                            <td className="px-4 py-2 text-center font-mono text-gray-400 bg-purple-900/5 border-l-2 border-purple-600/60">
                               {action.avg_price_shunky > 0 ? (action.avg_price_shunky * 100).toFixed(1) : '-'}
                             </td>
                           )}
-                          <td className={`px-4 py-2 text-right font-mono bg-green-900/5 ${action.pnl_shunky >= 0 ? 'text-green-400' : 'text-red-400'}`}>
-                            ${action.pnl_shunky?.toFixed(2) || '0.00'}
-                          </td>
-                          <td className="px-4 py-2 text-right font-mono bg-green-900/5 text-green-300">
+                          <td className={`px-4 py-2 text-center font-mono bg-purple-900/5 text-gray-400 text-[15px] ${!showPrices ? 'border-l-2 border-purple-600/60' : ''}`}>
                             {action.size_shunky.toFixed(0)}
                           </td>
-                          <td className="px-4 py-2 text-right font-mono">
+                          <td className={`px-4 py-2 text-center font-mono bg-purple-900/5 text-[15px] ${action.pnl_shunky >= 0 ? 'text-green-400' : 'text-red-400'}`}>
+                            ${Math.round(action.pnl_shunky || 0).toLocaleString()}
+                          </td>
+                          <td className="px-4 py-2 text-center font-mono bg-purple-900/5 text-gray-400 text-[15px]">
                             {action.delta_shares > 0 ? '+' : ''}
                             {action.delta_shares.toFixed(0)}
                           </td>
-                          <td
-                            className="px-4 py-2 text-center cursor-pointer hover:bg-gray-700/30 transition-colors"
-                            onClick={() => handleOpenOrderModal(action)}
-                          >
+                          <td className="px-4 py-2 text-center bg-purple-900/5 border-r-2 border-purple-600/60">
                             {pendingOrder ? (
                               <div className="flex items-center justify-center gap-2">
                                 <Clock
@@ -819,7 +888,12 @@ export default function CopyTrading() {
                                 </button>
                               </div>
                             ) : (
-                              <span className="text-gray-600 text-xs">Click to add</span>
+                              <button
+                                onClick={() => handleOpenOrderModal(action)}
+                                className="text-gray-600 text-xs hover:text-gray-400 transition-colors"
+                              >
+                                Click to add
+                              </button>
                             )}
                           </td>
                         </tr>

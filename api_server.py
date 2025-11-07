@@ -31,6 +31,9 @@ from copy_trading_engine import copy_trading_engine
 # Import copy trading database initialization
 from init_copy_trading_db import init_copy_trading_tables
 
+# Import orderbook cache for bid/ask/spread data
+from orderbook_cache import orderbook_cache
+
 # Import authentication
 from auth import (
     LoginRequest,
@@ -285,7 +288,21 @@ async def get_copy_trading_comparison(
                     "pnl_25usdc": float(row['pnl_target']) if row['pnl_target'] != 0 else 0.0,
                     "pnl_shunky": float(row['pnl_user']) if row['pnl_user'] != 0 else 0.0,
                     "target_size": float(row['target_size']),
-                    "size_shunky": float(row['size_user'])
+                    "size_shunky": float(row['size_user']),
+                    **{
+                        # Fetch orderbook data from cache
+                        **({
+                            "best_bid": float(orderbook['best_bid']),
+                            "best_ask": float(orderbook['best_ask']),
+                            "spread": float(orderbook['spread']),
+                            "spread_percentage": float(orderbook['spread_percentage'])
+                        } if (orderbook := orderbook_cache.get_orderbook_for_market(str(row['market']), str(row['side']))) else {
+                            "best_bid": None,
+                            "best_ask": None,
+                            "spread": None,
+                            "spread_percentage": None
+                        })
+                    }
                 }
                 for _, row in actions_needed.iterrows()
             ],

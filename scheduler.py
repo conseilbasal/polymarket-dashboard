@@ -15,6 +15,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 
 from database import save_snapshot, save_capital_snapshot, init_db
 from copy_trading_engine import copy_trading_engine
+from orderbook_cache import orderbook_cache
 
 # Configure logging
 logging.basicConfig(
@@ -208,6 +209,16 @@ def start_scheduler():
         logger.info("Copy Trading jobs added (5-minute intervals)")
     else:
         logger.warning("Copy Trading jobs NOT added - environment variables not configured")
+
+    # Add Orderbook Cache refresh job (every 60 seconds)
+    scheduler.add_job(
+        func=orderbook_cache.refresh_all_active_markets,
+        trigger=IntervalTrigger(seconds=60),
+        id='orderbook_refresh',
+        name='Orderbook Cache Refresh',
+        replace_existing=True
+    )
+    logger.info("Orderbook cache refresh job added (60-second intervals)")
 
     # Start scheduler
     scheduler.start()

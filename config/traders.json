@@ -11,6 +11,14 @@
         {
             "name": "Car",
             "address": "0x7c3db723f1d4d8cb9c550095203b686cb11e5c6b"
+        },
+        {
+            "name": "scottilicious",
+            "address": "0x000d257d2dc7616feaef4ae0f14600fdf50a758e"
+        },
+        {
+            "name": "Nostdam",
+            "address": "0xe732156a2d84cdfb4de831d3f11a22899e49898f"
         }
     ]
 }

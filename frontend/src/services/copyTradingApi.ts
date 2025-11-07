@@ -31,6 +31,23 @@ export interface ComparisonAction {
   avg_price_shunky: number;
   target_size: number;
   size_shunky: number;
+  current_price: number;
+  pnl_25usdc: number;
+  pnl_shunky: number;
+  best_bid: number | null;
+  best_ask: number | null;
+  spread: number | null;
+  spread_percentage: number | null;
+}
+
+export interface Trader {
+  name: string;
+  address: string;
+  stats?: {
+    positions: number;
+    exposure: number;
+    pnl: number;
+  };
 }
 
 export interface CopyTradingData {
@@ -168,6 +185,17 @@ export const copyTradingApi = {
       return response.data.changes;
     } catch (error) {
       console.error('Failed to fetch 24h changes:', error);
+      return [];
+    }
+  },
+
+  // Get list of traders
+  getTraders: async (): Promise<Trader[]> => {
+    try {
+      const response = await apiClient.get(`/api/traders`);
+      return response.data.traders || [];
+    } catch (error) {
+      console.error('Failed to fetch traders:', error);
       return [];
     }
   },
